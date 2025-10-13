@@ -1,0 +1,41 @@
+# Build artifacts
+builds/opusreader.app/
+builds/OpusReader.app/
+builds/intermediate/
+builds/*.zip
+
+# Keep the DMG for releases
+!builds/opusreader.dmg
+
+# Generated Makefiles
+Makefile.qmake
+.qmake.stash
+
+# mupdf build
+mupdf/build/
+
+# Qt generated files
+*.o
+moc_*.cpp
+moc_*.h
+ui_*.h
+qrc_*.cpp
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# User config files
+pdf_viewer/prefs_user.config
+pdf_viewer/keys_user.config
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log

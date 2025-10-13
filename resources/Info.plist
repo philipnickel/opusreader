@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDocumentTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeName</key>
+			<string>PDF Document</string>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>LSHandlerRank</key>
+			<string>Alternate</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>com.adobe.pdf</string>
+			</array>
+		</dict>
+	</array>
+	<key>CFBundleExecutable</key>
+	<string>@EXECUTABLE@</string>
+	<key>CFBundleIconFile</key>
+	<string>@ICON@</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.opusreader.opusreader</string>
+	<key>CFBundleName</key>
+	<string>OpusReader</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>@SHORT_VERSION@</string>
+	<key>CFBundleSignature</key>
+	<string>????</string>
+	<key>LSEnvironment</key>
+	<dict>
+		<key>PATH</key>
+		<string>/opt/homebrew/opt/qt@5/bin:/Users/philipnickel/.local/bin:/Users/philipnickel/.local/bin:/Applications/flutter/bin:/Users/philipnickel/.npm-global/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/Library/TeX/texbin:/Applications/VMware Fusion.app/Contents/Public:/Applications/quarto/bin:/Users/philipnickel/.local/bin:/Users/philipnickel/miniforge3/condabin:/Applications/flutter/bin:/Users/philipnickel/.npm-global/bin:/Users/philipnickel/.cargo/bin:/Users/philipnickel/.orbstack/bin:/opt/homebrew/opt/fzf/bin:/Applications/Visual Studio Code.app/Contents/Resources/app/bin:/Users/philipnickel/.orbstack/bin:/Applications/Visual Studio Code.app/Contents/Resources/app/bin</string>
+	</dict>
+	<key>LSMinimumSystemVersion</key>
+	<string>10.15</string>
+	<key>NSPrincipalClass</key>
+	<string>NSApplication</string>
+	<key>NSSupportsAutomaticGraphicsSwitching</key>
+	<true/>
+</dict>
+</plist>
