@@ -58,11 +58,11 @@ Create `~/Library/Application Support/OpusReader/keys_user.config` to customize 
 
 ## 📖 Documentation
 
-Full documentation: [opusreader.philipnickel.com](https://opusreader.philipnickel.com) _(coming soon)_
+Full documentation: [philipnickel.github.io/opusreader](https://philipnickel.github.io/opusreader/)
 
-- [Transparency Guide](docs/TRANSPARENCY.md)
-- [macOS Features](docs/MACOS_ONLY.md)
-- [Repository Structure](docs/REPO_STRUCTURE.md)
+- [Installation Guide](https://philipnickel.github.io/opusreader/getting-started/installation/)
+- [Configuration](https://philipnickel.github.io/opusreader/configuration/overview/)
+- [Transparency Guide](https://philipnickel.github.io/opusreader/latest/) _(coming soon)_
 
 ## 🛠️ Building from Source
 

@@ -40,7 +40,7 @@ jobs:
       - name: Deploy dev docs (staging)
         if: github.ref == 'refs/heads/staging'
         run: |
-          mike deploy --push --update-aliases dev beta
+          mike deploy --push --update-aliases pre-release beta
       
       - name: Deploy versioned docs (tags)
         if: startsWith(github.ref, 'refs/tags/v')
