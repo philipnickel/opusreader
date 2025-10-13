@@ -1,0 +1,76 @@
+site_name: OpusReader Documentation
+site_url: https://opusreader.philipnickel.com
+repo_url: https://github.com/philipnickel/opusreader
+repo_name: philipnickel/opusreader
+
+theme:
+  name: material
+  palette:
+    # Light mode
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    # Dark mode
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+
+plugins:
+  - search
+  - mike:
+      alias_type: symlink
+      canonical_version: latest
+
+extra:
+  version:
+    provider: mike
+
+nav:
+  - Home: index.md
+  - Getting Started:
+      - Installation: getting-started/installation.md
+      - First Launch: getting-started/first-launch.md
+      - Basic Usage: getting-started/basic-usage.md
+  - Configuration:
+      - Overview: configuration/overview.md
+      - Transparency & Blur: configuration/transparency.md
+      - Keybindings: configuration/keybindings.md
+      - Color Schemes: configuration/colors.md
+  - Features:
+      - Window Blur: features/blur.md
+      - Transparency: features/transparency.md
+      - Navigation: features/navigation.md
+  - Building:
+      - From Source: building/from-source.md
+      - Development: building/development.md
+  - About:
+      - Credits: about/credits.md
+      - License: about/license.md
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.tabbed:
+      alternate_style: true
+  - attr_list
+  - md_in_html
