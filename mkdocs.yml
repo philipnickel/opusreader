@@ -1,7 +1,9 @@
 site_name: OpusReader Documentation
-site_url: https://opusreader.philipnickel.com
+site_url: https://philipnickel.github.io/opusreader
 repo_url: https://github.com/philipnickel/opusreader
 repo_name: philipnickel/opusreader
+docs_dir: docs_site/docs
+site_dir: site
 
 theme:
   name: material
