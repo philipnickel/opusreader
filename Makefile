@@ -1,4 +1,4 @@
-.PHONY: all build clean help release release-staging
+.PHONY: all build bundle clean help release
 
 # Default target
 all: build
@@ -9,13 +9,16 @@ help:
 	@echo "======================="
 	@echo ""
 	@echo "Available targets:"
-	@echo "  make build           - Build the app and DMG"
-	@echo "  make release         - Create stable release from builds/opusreader.dmg"
-	@echo "  make release-staging - Create pre-release from builds/opusreader.dmg"
+	@echo "  make build           - Build the app (fast, no DMG)"
+	@echo "  make bundle          - Create DMG from existing .app"
+	@echo "  make release         - Create release (auto-detects main/staging)"
 	@echo "  make clean           - Clean all build artifacts"
 	@echo ""
+	@echo "Typical workflow:"
+	@echo "  make clean && make build && make bundle && make release"
+	@echo ""
 
-# Full build
+# Fast build (app only, no DMG)
 build:
 	@echo "Building mupdf..."
 	@cd mupdf && $(MAKE)
@@ -32,41 +35,59 @@ build:
 	@macdeployqt builds/opusreader.app
 	@echo "Signing application..."
 	@codesign --force --deep --sign - builds/opusreader.app
-	@echo "Creating DMG..."
-	@rm -f builds/opusreader.dmg
-	@macdeployqt builds/opusreader.app -dmg
 	@echo ""
 	@echo "========================================="
 	@echo "✓ Build complete!"
 	@echo "  App: builds/opusreader.app"
-	@echo "  DMG: builds/opusreader.dmg"
 	@echo "========================================="
 
-# Create stable release (requires existing DMG)
+# Create DMG from existing .app
+bundle:
+	@if [ ! -d builds/opusreader.app ]; then \
+		echo "❌ Error: builds/opusreader.app not found"; \
+		echo "   Run 'make build' first"; \
+		exit 1; \
+	fi
+	@echo "Creating DMG from app bundle..."
+	@rm -f builds/opusreader.dmg
+	@macdeployqt builds/opusreader.app -dmg
+	@echo "Re-signing application..."
+	@codesign --force --deep --sign - builds/opusreader.app
+	@echo ""
+	@echo "========================================="
+	@echo "✓ Bundle complete!"
+	@echo "  DMG: builds/opusreader.dmg"
+	@echo "  App: builds/opusreader.app (re-signed)"
+	@echo "========================================="
+
+# Create release (auto-detects branch)
 release:
 	@if [ ! -f builds/opusreader.dmg ]; then \
 		echo "❌ Error: builds/opusreader.dmg not found"; \
 		echo "   Run 'make build' first"; \
 		exit 1; \
 	fi
+	@BRANCH=$$(git branch --show-current); \
+	if [ "$$BRANCH" = "staging" ]; then \
+		$(MAKE) release-staging-internal; \
+	elif [ "$$BRANCH" = "main" ]; then \
+		$(MAKE) release-main-internal; \
+	else \
+		echo "❌ Error: Must be on 'main' or 'staging' branch"; \
+		echo "   Current branch: $$BRANCH"; \
+		exit 1; \
+	fi
+
+# Internal: Create stable release from main
+release-main-internal:
 	@echo ""
 	@echo "========================================="
-	@echo "Creating Stable Release"
+	@echo "Creating Stable Release (main)"
 	@echo "========================================="
 	@COMMIT_COUNT=$$(git rev-list --count HEAD); \
 	VERSION="v1.0.$$COMMIT_COUNT"; \
 	SHORT_SHA=$$(git rev-parse --short HEAD); \
 	COMMIT_MSG=$$(git log -1 --pretty=%B); \
-	BRANCH=$$(git branch --show-current); \
-	if [ "$$BRANCH" != "main" ]; then \
-		echo "⚠️  Warning: Not on main branch (current: $$BRANCH)"; \
-		read -p "Continue anyway? [y/N] " -n 1 -r; \
-		echo; \
-		if [[ ! $$REPLY =~ ^[Yy]$$ ]]; then \
-			echo "Aborted."; \
-			exit 1; \
-		fi; \
-	fi; \
 	echo "Version: $$VERSION"; \
 	echo "Commit: $$SHORT_SHA"; \
 	echo ""; \
@@ -79,40 +100,25 @@ release:
 	echo "✓ Release $$VERSION created!" && \
 	echo "  View: https://github.com/$$(git config --get remote.origin.url | sed 's/.*://;s/.git$$//')/releases"
 
-# Create pre-release (requires existing DMG)
-release-staging:
-	@if [ ! -f builds/opusreader.dmg ]; then \
-		echo "❌ Error: builds/opusreader.dmg not found"; \
-		echo "   Run 'make build' first"; \
-		exit 1; \
-	fi
+# Internal: Create pre-release from staging
+release-staging-internal:
 	@echo ""
 	@echo "========================================="
-	@echo "Creating Pre-release (Staging)"
+	@echo "Creating Pre-release (staging)"
 	@echo "========================================="
 	@COMMIT_COUNT=$$(git rev-list --count HEAD); \
 	VERSION="v1.0.$$COMMIT_COUNT-beta"; \
 	SHORT_SHA=$$(git rev-parse --short HEAD); \
-	COMMIT_MSG=$$(git log -1 --pretty=%B); \
-	BRANCH=$$(git branch --show-current); \
-	if [ "$$BRANCH" != "staging" ]; then \
-		echo "⚠️  Warning: Not on staging branch (current: $$BRANCH)"; \
-		read -p "Continue anyway? [y/N] " -n 1 -r; \
-		echo; \
-		if [[ ! $$REPLY =~ ^[Yy]$$ ]]; then \
-			echo "Aborted."; \
-			exit 1; \
-		fi; \
-	fi; \
 	echo "Version: $$VERSION"; \
 	echo "Commit: $$SHORT_SHA"; \
 	echo ""; \
 	echo "Deleting old staging-latest release..."; \
-	gh release delete staging-latest --yes 2>/dev/null || true; \
+	git tag -d staging-latest 2>/dev/null || true; \
 	git push --delete origin staging-latest 2>/dev/null || true; \
+	gh release delete staging-latest --yes 2>/dev/null || true; \
 	gh release create staging-latest \
-		--title "🚧 Latest Staging Build (Pre-release)" \
-		--notes "$$COMMIT_MSG\n\n---\n\n⚠️ **Pre-release build** - may contain bugs" \
+		--title "Latest Build (Pre-release)" \
+		--notes "**Experimental Build** Containing experimental features and changes. May contain bugs or incomplete features." \
 		--prerelease \
 		builds/opusreader.dmg && \
 	echo "" && \

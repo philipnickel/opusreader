@@ -14,20 +14,21 @@ vim docs_site/docs/features/blur.md  # Update docs if needed
 # 2. Commit and push
 git add .
 git commit -m "Add new blur feature"
-git push origin main
+git push origin main  # or staging
 
 # 3. Build
 make build
 
-# 4. Release
+# 4. Release (auto-detects branch)
 make release
 ```
 
-That's it! This will:
-- ✅ Create a GitHub release with the DMG
-- ✅ Auto-version as v1.0.X (based on commit count)
-- ✅ Deploy documentation automatically
-- ✅ Update "latest" docs
+That's it! `make release` automatically:
+- ✅ Detects if you're on `main` or `staging`
+- ✅ Creates stable release (main) or pre-release (staging)
+- ✅ Auto-versions as v1.0.X
+- ✅ Uses commit message for release notes (main only)
+- ✅ Deploys documentation automatically
 
 ### What Happens
 
@@ -38,17 +39,11 @@ That's it! This will:
    - Signs the app
    - Packages into DMG
 
-2. **`make release`**
-   - Creates git tag (v1.0.X)
-   - Creates GitHub release
+2. **`make release`** (auto-detects branch)
+   - **On main**: Creates versioned stable release (v1.0.X) with commit message
+   - **On staging**: Creates/updates `staging-latest` pre-release with experimental warning
    - Uploads DMG file
-   - Uses commit message as release notes
    - Triggers docs deployment (via GitHub Actions)
-
-3. **GitHub Actions** (automatic)
-   - Deploys docs to GitHub Pages
-   - Creates versioned docs (e.g., v1.0.1)
-   - Updates "latest" docs
 
 ### Version Numbering
 
@@ -74,13 +69,13 @@ docs_site/docs/
 ### Commands
 
 ```bash
-make build           # Build app and DMG
-make release         # Create stable release
-make clean           # Clean build artifacts (keeps DMG)
-make help            # Show all commands
+make build    # Build app and DMG
+make release  # Create release (auto-detects main/staging branch)
+make clean    # Clean build artifacts (keeps DMG)
+make help     # Show all commands
 ```
 
-### Pre-Release Testing (Optional)
+### Pre-Release Testing
 
 Use the `staging` branch for testing:
 
@@ -92,12 +87,16 @@ git checkout -b feature/new-thing
 make build
 open builds/opusreader.app
 
-# When ready, merge to staging for testing
+# When ready, merge to staging
 git checkout staging
 git merge feature/new-thing
 git push origin staging
 
-# Test thoroughly, then merge to main for release
+# Create pre-release for testing
+make build
+make release  # Auto-creates staging-latest pre-release
+
+# Test thoroughly, then merge to main for stable release
 git checkout main
 git merge staging
 git push origin main

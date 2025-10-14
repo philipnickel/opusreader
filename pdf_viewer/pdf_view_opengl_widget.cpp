@@ -15,6 +15,7 @@ extern float HIGHLIGHT_COLORS[26 * 3];
 extern bool SHOULD_DRAW_UNRENDERED_PAGES;
 extern bool ENABLE_TRANSPARENCY;
 extern float WINDOW_TRANSPARENCY;
+extern float PDF_BACKGROUND_ALPHA;
 extern float CUSTOM_BACKGROUND_COLOR[3];
 extern float CUSTOM_TEXT_COLOR[3];
 extern bool RERENDER_OVERVIEW;
@@ -1512,14 +1513,14 @@ void PdfViewOpenGLWidget::toggle_custom_color_mode() {
 }
 
 void PdfViewOpenGLWidget::bind_program() {
-	// Calculate transparency value for PDF pages
-	// When transparency is enabled, use WINDOW_TRANSPARENCY value
-	float pdf_transparency = ENABLE_TRANSPARENCY ? WINDOW_TRANSPARENCY : 1.0f;
+	// Calculate transparency value for PDF background
+	// When transparency is enabled, use PDF_BACKGROUND_ALPHA for PDF background opacity
+	float pdf_transparency = ENABLE_TRANSPARENCY ? PDF_BACKGROUND_ALPHA : 1.0f;
 	
 	static bool logged = false;
 	if (!logged) {
 		std::wcout << L"[DEBUG] bind_program: ENABLE_TRANSPARENCY=" << ENABLE_TRANSPARENCY 
-		          << L", WINDOW_TRANSPARENCY=" << WINDOW_TRANSPARENCY 
+		          << L", PDF_BACKGROUND_ALPHA=" << PDF_BACKGROUND_ALPHA 
 		          << L", pdf_transparency=" << pdf_transparency 
 		          << L", color_mode=" << static_cast<int>(color_mode) << std::endl;
 		logged = true;

@@ -129,6 +129,8 @@ extern bool VIMTEX_WSL_FIX;
 extern bool ENABLE_TRANSPARENCY;
 extern float WINDOW_TRANSPARENCY;
 extern int MACOS_BLUR_MATERIAL;
+extern float PDF_BACKGROUND_ALPHA;
+extern int MACOS_BLUR_AMOUNT;
 
 template<typename T>
 void* generic_deserializer(std::wstringstream& stream, void* res_) {
@@ -358,6 +360,8 @@ ConfigManager::ConfigManager(const Path& default_path, const Path& auto_path ,co
 	configs.push_back({ L"enable_transparency", &ENABLE_TRANSPARENCY, bool_serializer, bool_deserializer, bool_validator });
 	configs.push_back({ L"window_transparency", &WINDOW_TRANSPARENCY, float_serializer, float_deserializer, nullptr });
 	configs.push_back({ L"macos_blur_material", &MACOS_BLUR_MATERIAL, int_serializer, int_deserializer, nullptr });
+	configs.push_back({ L"pdf_background_alpha", &PDF_BACKGROUND_ALPHA, float_serializer, float_deserializer, nullptr });
+	configs.push_back({ L"macos_blur_amount", &MACOS_BLUR_AMOUNT, int_serializer, int_deserializer, nullptr });
 	configs.push_back({ L"google_scholar_address", &GOOGLE_SCHOLAR_ADDRESS, string_serializer, string_deserializer, nullptr });
 	configs.push_back({ L"item_list_prefix", &ITEM_LIST_PREFIX, string_serializer, string_deserializer, nullptr });
 	configs.push_back({ L"inverse_search_command", &INVERSE_SEARCH_COMMAND, string_serializer, string_deserializer, nullptr });

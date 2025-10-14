@@ -1,3 +1,4 @@
+QMAKE_MKSPECS = /opt/homebrew/opt/qt@6/lib/qt/mkspecs
 TEMPLATE = app
 TARGET = opusreader
 VERSION = 2.0.0
@@ -6,7 +7,7 @@ INCLUDEPATH += ./pdf_viewer\
               zlib
           
 
-QT += core opengl gui widgets network 3dinput 
+QT += core opengl gui widgets network 3dinput dbus 
 
 greaterThan(QT_MAJOR_VERSION, 5){
 	QT += openglwidgets
@@ -134,7 +135,7 @@ mac {
     LIBS += -ldl -Lmupdf/build/release -lmupdf -lmupdf-third -lz
     CONFIG+=sdk_no_version_check
     QMAKE_MACOSX_DEPLOYMENT_TARGET = 11
-    ICON = pdf_viewer\icon2.ico
+    ICON = resources/icon.icns
     QMAKE_INFO_PLIST = resources/Info.plist
 }
 

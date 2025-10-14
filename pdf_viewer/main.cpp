@@ -52,6 +52,11 @@
 #include <qdir.h>
 #include <qsurfaceformat.h>
 
+#ifdef Q_OS_MACOS
+#include <objc/objc.h>
+#include <objc/message.h>
+#endif
+
 #include <mupdf/fitz.h>
 #include "sqlite3.h"
 
@@ -177,6 +182,8 @@ bool USE_HEURISTIC_IF_TEXT_SUMMARY_NOT_AVAILABLE = false;
 bool ENABLE_TRANSPARENCY = false;
 float WINDOW_TRANSPARENCY = 0.90f;
 int MACOS_BLUR_MATERIAL = 23;  // NSVisualEffectMaterialUnderWindowBackground by default
+float PDF_BACKGROUND_ALPHA = 0.75f;  // Opacity for PDF background (0.0 = fully transparent, 1.0 = fully opaque)
+int MACOS_BLUR_AMOUNT = 35;  // Blur strength (0-100, similar to WezTerm)
 int TEXT_SUMMARY_CONTEXT_SIZE = 49;
 float VISUAL_MARK_NEXT_PAGE_FRACTION = 0.25f;
 float VISUAL_MARK_NEXT_PAGE_THRESHOLD = 0.1f;
@@ -693,6 +700,15 @@ void focus_on_widget(QWidget* widget) {
 	widget->setWindowState(widget->windowState() & ~Qt::WindowMinimized | Qt::WindowActive);
 }
 
+#ifdef Q_OS_MACOS
+void activate_macos_app() {
+	// Get NSApplication shared instance
+	id app = ((id(*)(Class, SEL))objc_msgSend)((Class)objc_getClass("NSApplication"), sel_registerName("sharedApplication"));
+	// Call [NSApp activateIgnoringOtherApps:YES]
+	((void(*)(id, SEL, BOOL))objc_msgSend)(app, sel_registerName("activateIgnoringOtherApps:"), YES);
+}
+#endif
+
 int main(int argc, char* args[]) {
 
 	if (has_arg(argc, args, "--version")) {
@@ -843,6 +859,13 @@ int main(int argc, char* args[]) {
 	}
 
 	main_widget->show();
+	main_widget->raise();
+	main_widget->activateWindow();
+
+#ifdef Q_OS_MACOS
+	// Explicitly activate the application on macOS to ensure keyboard focus
+	activate_macos_app();
+#endif
 
 	handle_args(app.arguments());
 	main_widget->command_manager->create_macro_command("", STARTUP_COMMANDS)->run(main_widget);

@@ -38,6 +38,7 @@ extern float STATUS_BAR_TEXT_COLOR[3];
 extern float UI_SELECTED_TEXT_COLOR[3];
 extern float UI_SELECTED_BACKGROUND_COLOR[3];
 extern bool NUMERIC_TAGS;
+extern bool ENABLE_TRANSPARENCY;
 
 #ifdef Q_OS_WIN
 #include <windows.h>
@@ -2219,37 +2220,52 @@ void flat_char_prism(const std::vector<fz_stext_char*> chars, int page, std::wst
 }
 
 QString get_status_stylesheet(bool nofont) {
+    // Create semi-transparent background with blur for UI elements
+    QString transparency_style = "";
+    if (ENABLE_TRANSPARENCY) {
+        // Use rgba for transparency support
+        transparency_style = QString("background: rgba(%1, %2, %3, 0.75);")
+            .arg(int(STATUS_BAR_COLOR[0] * 255))
+            .arg(int(STATUS_BAR_COLOR[1] * 255))
+            .arg(int(STATUS_BAR_COLOR[2] * 255));
+    } else {
+        transparency_style = QString("background-color: %1;")
+            .arg(get_color_qml_string(STATUS_BAR_COLOR[0], STATUS_BAR_COLOR[1], STATUS_BAR_COLOR[2]));
+    }
+    
+    QString color_style = QString("color: %1;")
+        .arg(get_color_qml_string(STATUS_BAR_TEXT_COLOR[0], STATUS_BAR_TEXT_COLOR[1], STATUS_BAR_TEXT_COLOR[2]));
+    
+    QString font_style = "";
     if ((!nofont) && (STATUS_BAR_FONT_SIZE > -1)) {
-        QString	font_size_stylesheet = QString("font-size: %1px").arg(STATUS_BAR_FONT_SIZE);
-        return QString("background-color: %1; color: %2; border: 0; %3;").arg(
-            get_color_qml_string(STATUS_BAR_COLOR[0], STATUS_BAR_COLOR[1], STATUS_BAR_COLOR[2]),
-            get_color_qml_string(STATUS_BAR_TEXT_COLOR[0], STATUS_BAR_TEXT_COLOR[1], STATUS_BAR_TEXT_COLOR[2]),
-            font_size_stylesheet
-        );
+        font_style = QString("font-size: %1px;").arg(STATUS_BAR_FONT_SIZE);
     }
-    else{
-        return QString("background-color: %1; color: %2; border: 0;").arg(
-            get_color_qml_string(STATUS_BAR_COLOR[0], STATUS_BAR_COLOR[1], STATUS_BAR_COLOR[2]),
-            get_color_qml_string(STATUS_BAR_TEXT_COLOR[0], STATUS_BAR_TEXT_COLOR[1], STATUS_BAR_TEXT_COLOR[2])
-        );
-    }
+    
+    return transparency_style + color_style + font_style + "border: 0; padding: 5px;";
 }
 
 QString get_selected_stylesheet(bool nofont) {
+    // Create semi-transparent background for selected items
+    QString transparency_style = "";
+    if (ENABLE_TRANSPARENCY) {
+        transparency_style = QString("background: rgba(%1, %2, %3, 0.75);")
+            .arg(int(UI_SELECTED_BACKGROUND_COLOR[0] * 255))
+            .arg(int(UI_SELECTED_BACKGROUND_COLOR[1] * 255))
+            .arg(int(UI_SELECTED_BACKGROUND_COLOR[2] * 255));
+    } else {
+        transparency_style = QString("background-color: %1;")
+            .arg(get_color_qml_string(UI_SELECTED_BACKGROUND_COLOR[0], UI_SELECTED_BACKGROUND_COLOR[1], UI_SELECTED_BACKGROUND_COLOR[2]));
+    }
+    
+    QString color_style = QString("color: %1;")
+        .arg(get_color_qml_string(UI_SELECTED_TEXT_COLOR[0], UI_SELECTED_TEXT_COLOR[1], UI_SELECTED_TEXT_COLOR[2]));
+    
+    QString font_style = "";
     if ((!nofont) && STATUS_BAR_FONT_SIZE > -1) {
-        QString	font_size_stylesheet = QString("font-size: %1px").arg(STATUS_BAR_FONT_SIZE);
-        return QString("background-color: %1; color: %2; border: 0; %3;").arg(
-            get_color_qml_string(UI_SELECTED_BACKGROUND_COLOR[0], UI_SELECTED_BACKGROUND_COLOR[1], UI_SELECTED_BACKGROUND_COLOR[2]),
-            get_color_qml_string(UI_SELECTED_TEXT_COLOR[0], UI_SELECTED_TEXT_COLOR[1], UI_SELECTED_TEXT_COLOR[2]),
-            font_size_stylesheet
-        );
+        font_style = QString("font-size: %1px;").arg(STATUS_BAR_FONT_SIZE);
     }
-    else{
-        return QString("background-color: %1; color: %2; border: 0;").arg(
-            get_color_qml_string(UI_SELECTED_BACKGROUND_COLOR[0], UI_SELECTED_BACKGROUND_COLOR[1], UI_SELECTED_BACKGROUND_COLOR[2]),
-            get_color_qml_string(UI_SELECTED_TEXT_COLOR[0], UI_SELECTED_TEXT_COLOR[1], UI_SELECTED_TEXT_COLOR[2])
-        );
-    }
+    
+    return transparency_style + color_style + font_style + "border: 0; padding: 5px;";
 }
 
 void convert_color4(float* in_color, int* out_color) {

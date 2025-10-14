@@ -8,16 +8,22 @@ uniform mat4 transform_matrix;
 uniform float transparency;
 
 void main(){
-    vec4 pdf_color = vec4(texture(pdf_texture, uvs).rgb, 1);
+    // Get original PDF color (before transformation)
+    vec3 original_rgb = texture(pdf_texture, uvs).rgb;
+    
+    // Detect text vs background on ORIGINAL PDF colors
+    // In original PDF: text is dark, background is light
+    float original_luminance = dot(original_rgb, vec3(0.299, 0.587, 0.114));
+    float backgroundFactor = smoothstep(0.3, 0.7, original_luminance);
+    
+    // Apply transformation to get final colors
+    vec4 pdf_color = vec4(original_rgb, 1);
     vec3 resulting_unclamped_color = (transform_matrix * pdf_color).rgb;
     vec3 resulting_color = clamp(resulting_unclamped_color, 0, 1);
     
-    // Calculate luminance to detect text vs background
-    float luminance = dot(resulting_color, vec3(0.299, 0.587, 0.114));
-    
-    // For DARK pixels (text/content) use FULL opacity
-    // For LIGHT pixels (background) use transparency
-    float alpha = mix(1.0, transparency, smoothstep(0.3, 0.7, luminance));
+    // Text (dark in original) = FULL opacity
+    // Background (light in original) = transparency
+    float alpha = mix(1.0, transparency, backgroundFactor);
     
     color = vec4(resulting_color, alpha);
 }

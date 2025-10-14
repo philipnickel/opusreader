@@ -1,11 +1,5 @@
 # Build artifacts
-builds/opusreader.app/
-builds/OpusReader.app/
-builds/intermediate/
-builds/*.zip
-
-# Keep the DMG for releases
-!builds/opusreader.dmg
+builds/
 
 # Generated Makefiles
 Makefile.qmake
@@ -39,3 +33,6 @@ pdf_viewer/keys_user.config
 
 # Logs
 *.log
+
+# Documentation build
+site/
