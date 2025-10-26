@@ -357,7 +357,7 @@ const std::vector<int>& Document::get_flat_toc_pages() {
 
 float Document::get_page_height(int page_index) {
 	std::lock_guard guard(page_dims_mutex);
-	if ((page_index >= 0) && (page_index < page_heights.size())) {
+    if ((page_index >= 0) && (page_index < static_cast<int>(page_heights.size()))) {
 		return page_heights[page_index];
 	}
 	else {
@@ -366,7 +366,7 @@ float Document::get_page_height(int page_index) {
 }
 
 float Document::get_page_width(int page_index) {
-	if ((page_index >= 0) && (page_index < page_widths.size())) {
+    if ((page_index >= 0) && (page_index < static_cast<int>(page_widths.size()))) {
 		return page_widths[page_index];
 	}
 	else {
@@ -446,7 +446,7 @@ float Document::get_page_size_smart(bool width, int page_index, float* left_rati
 
 float Document::get_accum_page_height(int page_index) {
 	std::lock_guard guard(page_dims_mutex);
-	if (page_index < 0 || (page_index >= accum_page_heights.size())) {
+    if (page_index < 0 || (page_index >= static_cast<int>(accum_page_heights.size()))) {
 		return 0.0f;
 	}
 	return accum_page_heights[page_index];
@@ -688,7 +688,7 @@ void Document::load_page_dimensions(bool force_load_now) {
 		}
 	}
 
-	auto load_page_dimensions_function = [this, n, force_load_now]() {
+auto load_page_dimensions_function = [this, n]() {
 		std::vector<float> accum_page_heights_;
 		std::vector<float> page_heights_;
 		std::vector<float> page_widths_;
@@ -757,7 +757,7 @@ fz_rect Document::get_page_absolute_rect(int page) {
 
 	fz_rect res = {0, 0, 1, 1};
 
-	if (page >= page_widths.size()) {
+	if (page < 0 || static_cast<size_t>(page) >= page_widths.size()) {
 		return res;
 	}
 
@@ -903,7 +903,7 @@ DocumentPos Document::absolute_to_page_pos(AbsoluteDocumentPos absp){
 		accum_page_heights.end(), absp.y) -  accum_page_heights.begin()) - 1;
 	i = std::max(0, i);
 
-	if (i < accum_page_heights.size()) {
+	if (i < static_cast<int>(accum_page_heights.size())) {
 		float acc_page_heights_i = accum_page_heights[i];
 		float page_width = page_widths[i];
 		float remaining_y = absp.y - acc_page_heights_i;
@@ -1144,7 +1144,7 @@ std::vector<DocumentPos> Document::find_generic_locations(const std::wstring& ty
 	std::sort(pos_scores.begin(), pos_scores.end(), by_score);
 
 	std::vector<DocumentPos> res;
-	for (int i = pos_scores.size() - 1; i >= 0; i--) {
+	for (int i = static_cast<int>(pos_scores.size()) - 1; i >= 0; --i) {
 		res.push_back(pos_scores[i].second);
 	}
 	return res;
@@ -1163,7 +1163,7 @@ bool Document::can_use_highlights() {
 }
 
 std::optional<std::pair<std::wstring, std::wstring>> Document::get_generic_link_name_at_position(const std::vector<fz_stext_char*>& flat_chars, float offset_x, float offset_y) {
-	std::wregex regex(L"[a-zA-Z]{3,}(\.){0,1}[ \t]+[0-9]+(\.[0-9]+)*");
+	std::wregex regex(L"[a-zA-Z]{3,}(\\.){0,1}[ \\t]+[0-9]+(\\.[0-9]+)*");
 	std::optional<std::wstring> match_string = get_regex_match_at_position(regex, flat_chars, offset_x, offset_y);
 	if (match_string) {
 		std::vector<std::wstring> parts = split_whitespace(match_string.value());
@@ -1482,7 +1482,7 @@ void Document::get_text_selection(fz_context* ctx, AbsoluteDocumentPos selection
 					fz_rect charrect = document_to_absolute_rect(i, fz_rect_from_quad(current_char->quad), true);
 					selected_characters.push_back(charrect);
 				}
-				if ((current_char->next == nullptr)) {
+                if (current_char->next == nullptr) {
 					if (current_char->c != '-')
 					{
 						selected_text.push_back(' ');
@@ -1944,7 +1944,7 @@ int Document::add_stext_page_to_created_toc(fz_stext_page* stext_page,
 }
 
 float Document::document_to_absolute_y(int page, float doc_y) {
-	if ((page < accum_page_heights.size()) && (page >= 0)) {
+    if ((page >= 0) && (page < static_cast<int>(accum_page_heights.size()))) {
 		return doc_y + accum_page_heights[page];
 	}
 	return 0;
@@ -1953,7 +1953,7 @@ float Document::document_to_absolute_y(int page, float doc_y) {
 AbsoluteDocumentPos Document::document_to_absolute_pos(DocumentPos doc_pos, bool center_mid) {
 	float absolute_y = document_to_absolute_y(doc_pos.page, doc_pos.y);
 	AbsoluteDocumentPos res = {doc_pos.x, absolute_y};
-	if (center_mid && (doc_pos.page < page_widths.size())) {
+    if (center_mid && (doc_pos.page < static_cast<int>(page_widths.size()))) {
 		res.x -= page_widths[doc_pos.page] / 2;
 	}
 	return res;
@@ -2149,12 +2149,12 @@ const std::vector<fz_rect>& Document::get_page_lines(int page, std::vector<std::
 			std::vector<fz_rect> line_rects_;
 			std::vector<std::wstring> line_texts_;
 
-			for (int i = 0; i < line_rects.size(); i++) {
-				if (fz_contains_rect(bound, line_rects[i])) {
-					line_rects_.push_back(line_rects[i]);
-					line_texts_.push_back(line_texts[i]);
-				}
+		for (size_t i = 0; i < line_rects.size(); ++i) {
+			if (fz_contains_rect(bound, line_rects[i])) {
+				line_rects_.push_back(line_rects[i]);
+				line_texts_.push_back(line_texts[i]);
 			}
+		}
 
 
 			cached_page_line_rects[page] = line_rects_;

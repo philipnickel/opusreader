@@ -31,11 +31,16 @@ std::wstring esc(const std::string& inp) {
 }
 
 static int null_callback(void* notused, int argc, char** argv, char** col_name) {
-	return 0;
+    (void)notused;
+    (void)argc;
+    (void)argv;
+    (void)col_name;
+    return 0;
 }
 
 static int opened_book_callback(void* res_vector, int argc, char** argv, char** col_name) {
-	std::vector<OpenedBookState>* res = (std::vector<OpenedBookState>*) res_vector;
+    (void)col_name;
+    std::vector<OpenedBookState>* res = (std::vector<OpenedBookState>*) res_vector;
 
 	if (argc != 3) {
 		std::cerr << "Error in file " << __FILE__ << " " << "Line: " << __LINE__ << std::endl;
@@ -50,7 +55,8 @@ static int opened_book_callback(void* res_vector, int argc, char** argv, char** 
 }
 
 static int prev_doc_callback(void* res_vector, int argc, char** argv, char** col_name) {
-	std::vector<std::wstring>* res = (std::vector<std::wstring>*) res_vector;
+    (void)col_name;
+    std::vector<std::wstring>* res = (std::vector<std::wstring>*) res_vector;
 
 	if (argc != 1) {
 		std::cerr << "Error in file " << __FILE__ << " " << "Line: " << __LINE__ << std::endl;
@@ -61,6 +67,7 @@ static int prev_doc_callback(void* res_vector, int argc, char** argv, char** col
 }
 
 static int mark_select_callback(void* res_vector, int argc, char** argv, char** col_name) {
+    (void)col_name;
 
 	std::vector<Mark>* res = (std::vector<Mark>*)res_vector;
 	assert(argc == 2);
@@ -73,6 +80,7 @@ static int mark_select_callback(void* res_vector, int argc, char** argv, char** 
 }
 
 static int global_mark_select_callback(void* res_vector, int argc, char** argv, char** col_name) {
+    (void)col_name;
 
 	std::vector<std::pair<std::string, float>>* res = (std::vector<std::pair<std::string, float>>*)res_vector;
 	assert(argc == 2);
@@ -86,6 +94,7 @@ static int global_mark_select_callback(void* res_vector, int argc, char** argv, 
 }
 
 static int global_bookmark_select_callback(void* res_vector, int argc, char** argv, char** col_name) {
+    (void)col_name;
 
 	std::vector<std::pair<std::string, BookMark>>* res = (std::vector<std::pair<std::string, BookMark>>*)res_vector;
 	assert(argc == 3);
@@ -102,6 +111,7 @@ static int global_bookmark_select_callback(void* res_vector, int argc, char** ar
 }
 
 static int global_highlight_select_callback(void* res_vector, int argc, char** argv, char** col_name) {
+    (void)col_name;
 
 	std::vector<std::pair<std::string, Highlight>>* res = (std::vector<std::pair<std::string, Highlight>>*)res_vector;
 	assert(argc == 7);
@@ -127,6 +137,7 @@ static int global_highlight_select_callback(void* res_vector, int argc, char** a
 }
 
 static int bookmark_select_callback(void* res_vector, int argc, char** argv, char** col_name) {
+    (void)col_name;
 
 	std::vector<BookMark>* res = (std::vector<BookMark>*)res_vector;
 	assert(argc == 2);
@@ -139,6 +150,7 @@ static int bookmark_select_callback(void* res_vector, int argc, char** argv, cha
 }
 
 static int wstring_select_callback(void* res_vector, int argc, char** argv, char** col_name) {
+    (void)col_name;
 
 	std::vector<std::wstring>* res = (std::vector<std::wstring>*)res_vector;
 	assert(argc == 1);
@@ -149,18 +161,8 @@ static int wstring_select_callback(void* res_vector, int argc, char** argv, char
 	return 0;
 }
 
-static int string_select_callback(void* res_vector, int argc, char** argv, char** col_name) {
-
-	std::vector<std::string>* res = (std::vector<std::string>*)res_vector;
-	assert(argc == 1);
-
-	std::string desc = argv[0];
-
-	res->push_back(desc);
-	return 0;
-}
-
 static int wstring_pair_select_callback(void* res_vector, int argc, char** argv, char** col_name) {
+    (void)col_name;
 
 	std::vector<std::pair<std::wstring, std::wstring>>* res = (std::vector<std::pair<std::wstring, std::wstring>>*)res_vector;
 	assert(argc == 2);
@@ -173,6 +175,7 @@ static int wstring_pair_select_callback(void* res_vector, int argc, char** argv,
 }
 
 static int highlight_select_callback(void* res_vector, int argc, char** argv, char** col_name) {
+    (void)col_name;
 
 	std::vector<Highlight>* res = (std::vector<Highlight>*)res_vector;
 	assert(argc == 6);
@@ -195,6 +198,7 @@ static int highlight_select_callback(void* res_vector, int argc, char** argv, ch
 }
 
 static int link_select_callback(void* res_vector, int argc, char** argv, char** col_name) {
+    (void)col_name;
 
 	std::vector<Portal>* res = (std::vector<Portal>*)res_vector;
 	assert(argc == 5);
@@ -1107,7 +1111,7 @@ void DatabaseManager::import_json(std::wstring json_file_path, CachedChecksummer
 		float offset_y = current_json_doc["offset_y"].toDouble();
 		float zoom_level = current_json_doc["zoom_level"].toDouble();
 
-		auto bookmarks = std::move(load_from_json_array<BookMark>(current_json_doc["bookmarks"].toArray()));
+		auto bookmarks = load_from_json_array<BookMark>(current_json_doc["bookmarks"].toArray());
 		auto marks = load_from_json_array<Mark>(current_json_doc["marks"].toArray());
 		auto highlights = load_from_json_array<Highlight>(current_json_doc["highlights"].toArray());
 		auto portals = load_from_json_array<Portal>(current_json_doc["portals"].toArray());

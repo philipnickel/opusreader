@@ -1,5 +1,6 @@
 #include "ui.h"
 #include <qfiledialog.h>
+#include <qregularexpression.h>
 
 extern std::wstring DEFAULT_OPEN_FILE_PATH;
 
@@ -77,11 +78,8 @@ void ConfigFileChangeListener::notify_config_file_changed(ConfigManager* new_con
 bool HierarchialSortFilterProxyModel::filterAcceptsRow(int source_row, const QModelIndex& source_parent) const
 {
 	// custom behaviour :
-#ifdef OPUSREADER_QT6
-	if (filterRegularExpression().pattern().size() == 0)
-#else
-	if (filterRegExp().isEmpty() == false)
-#endif
+	const QRegularExpression filter_regex = filterRegularExpression();
+	if (!filter_regex.pattern().isEmpty())
 	{
 		// get source-model index for current row
 		QModelIndex source_index = sourceModel()->index(source_row, this->filterKeyColumn(), source_parent);
@@ -90,11 +88,7 @@ bool HierarchialSortFilterProxyModel::filterAcceptsRow(int source_row, const QMo
 			// check current index itself :
 			QString key = sourceModel()->data(source_index, filterRole()).toString();
 
-#ifdef OPUSREADER_QT6
-			bool parent_contains = key.contains(filterRegularExpression());
-#else
-			bool parent_contains = key.contains(filterRegExp());
-#endif
+			bool parent_contains = key.contains(filter_regex);
 
 			if (parent_contains) return true;
 

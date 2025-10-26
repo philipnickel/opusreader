@@ -146,7 +146,7 @@ std::optional<BookMark> DocumentView::find_closest_bookmark() {
 	if (current_document) {
 		int bookmark_index = current_document->find_closest_bookmark_index(current_document->get_bookmarks(), offset_y);
 		const std::vector<BookMark>& bookmarks = current_document->get_bookmarks();
-		if ((bookmark_index >= 0) && (bookmark_index < bookmarks.size())) {
+		if ((bookmark_index >= 0) && (bookmark_index < static_cast<int>(bookmarks.size()))) {
 			if (std::abs(bookmarks[bookmark_index].y_offset - offset_y) < 1000.0f) {
 				return bookmarks[bookmark_index];
 			}
@@ -348,6 +348,8 @@ NormalizedWindowPos DocumentView::document_to_window_pos(DocumentPos doc_pos) {
 		float window_y = static_cast<float>((window_pos.y - halfheight) / halfheight);
 		return { window_x, -window_y };
 	}
+
+	return { 0.0f, 0.0f };
 }
 
 WindowPos DocumentView::document_to_window_pos_in_pixels(DocumentPos doc_pos){
@@ -1112,7 +1114,7 @@ std::vector<DocumentPos> DocumentView::find_line_definitions() {
 		if ((size_t) line_index < lines.size()) {
 			std::wstring content = lines[line_index];
 
-			std::wstring item_regex(L"[a-zA-Z]{2,}[ \t]+[0-9]+(\.[0-9]+)*");
+			std::wstring item_regex = LR"([a-zA-Z]{2,}[ \t]+[0-9]+(\.[0-9]+)*)";
 			std::wstring reference_regex(L"\\[[a-zA-Z0-9]+\\]");
 			std::wstring equation_regex(L"\\([0-9]+(\\.[0-9]+)*\\)");
 
@@ -1126,7 +1128,7 @@ std::vector<DocumentPos> DocumentView::find_line_definitions() {
 
 			std::optional<PdfLink> pdf_link = current_document->get_link_in_page_rect(get_center_page_number(), line_rects[line_index]);
 			if (pdf_link.has_value()) {
-				auto parsed_uri = parse_uri(mupdf_context, pdf_link.value().uri);
+				auto parsed_uri = parse_uri(mupdf_context, current_document ? current_document->doc : nullptr, pdf_link.value().uri);
 				result.push_back({ parsed_uri.page - 1, parsed_uri.x, parsed_uri.y });
 				return result;
 			}
@@ -1217,7 +1219,7 @@ void DocumentView::get_visible_links(std::vector<std::pair<int, fz_link*>>& visi
 	for (auto page : visible_pages) {
 		fz_link* link = get_document()->get_page_links(page);
 		while (link) {
-            ParsedUri parsed_uri = parse_uri(mupdf_context, link->uri);
+            ParsedUri parsed_uri = parse_uri(mupdf_context, current_document ? current_document->doc : nullptr, link->uri);
             fz_rect window_rect = document_to_window_rect(page, link->rect);
             if ((window_rect.x0 >= -1) && (window_rect.x0 <= 1) && (window_rect.y0 >= -1) && (window_rect.y0 <= 1)) {
                 visible_page_links.push_back(std::make_pair(page, link));

@@ -29,6 +29,7 @@ DEALINGS IN THE SOFTWARE.
 #define UTF8_FOR_CPP_CHECKED_H_2675DCD0_9480_4c0c_B92A_CC14C027B731
 
 #include "core.h"
+#include <iterator>
 #include <stdexcept>
 
 namespace utf8
@@ -265,7 +266,15 @@ namespace utf8
 
     // The iterator class
     template <typename octet_iterator>
-    class iterator : public std::iterator <std::bidirectional_iterator_tag, uint32_t> {
+    class iterator {
+      public:
+      using iterator_category = std::bidirectional_iterator_tag;
+      using value_type = uint32_t;
+      using difference_type = typename std::iterator_traits<octet_iterator>::difference_type;
+      using pointer = value_type*;
+      using reference = value_type;
+
+      private:
       octet_iterator it;
       octet_iterator range_start;
       octet_iterator range_end;
@@ -323,5 +332,3 @@ namespace utf8
 } // namespace utf8
 
 #endif //header guard
-
-

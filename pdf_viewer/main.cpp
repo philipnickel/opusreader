@@ -12,12 +12,11 @@
 #include <memory>
 #include <filesystem>
 #include <map>
+#include <cstdlib>
 
 #include <qapplication.h>
 #include <qpushbutton.h>
-#ifndef OPUSREADER_QT6
 #include <qopenglwidget.h>
-#endif
 #include <qopenglextrafunctions.h>
 #include <qopenglfunctions.h>
 #include <qopengl.h>
@@ -37,10 +36,6 @@
 #include <qlabel.h>
 #include <qtextedit.h>
 #include <qfilesystemwatcher.h>
-
-#ifndef OPUSREADER_QT6
-#include <qdesktopwidget.h>
-#endif
 
 #include <qfontdatabase.h>
 #include <qstandarditemmodel.h>
@@ -71,6 +66,7 @@
 #include "document_view.h"
 #include "pdf_view_opengl_widget.h"
 #include "config.h"
+#include "config_constants.h"
 #include "utf8.h"
 #include "main_widget.h"
 #include "path.h"
@@ -106,6 +102,8 @@ float STATUS_BAR_TEXT_COLOR[3] = { 1.0f, 1.0f, 1.0f };
 float UI_SELECTED_TEXT_COLOR[3] = {0.0f, 0.0f, 0.0f};
 float UI_SELECTED_BACKGROUND_COLOR[3] = {1.0f, 1.0f, 1.0f};
 float UNSELECTED_SEARCH_HIGHLIGHT_COLOR[3] = {0.0f, 0.5f, 0.5f};
+bool STATUS_BAR_COLOR_OVERRIDDEN = false;
+bool STATUS_BAR_TEXT_COLOR_OVERRIDDEN = false;
 float GAMMA = 1.0f;
 bool DEBUG = false;
 
@@ -179,11 +177,20 @@ bool WHEEL_ZOOM_ON_CURSOR = false;
 bool TEXT_SUMMARY_HIGHLIGHT_SHOULD_REFINE = true;
 bool TEXT_SUMMARY_HIGHLIGHT_SHOULD_FILL = true;
 bool USE_HEURISTIC_IF_TEXT_SUMMARY_NOT_AVAILABLE = false;
-bool ENABLE_TRANSPARENCY = false;
-float WINDOW_TRANSPARENCY = 0.90f;
-int MACOS_BLUR_MATERIAL = 23;  // NSVisualEffectMaterialUnderWindowBackground by default
-float PDF_BACKGROUND_ALPHA = 0.75f;  // Opacity for PDF background (0.0 = fully transparent, 1.0 = fully opaque)
-int MACOS_BLUR_AMOUNT = 35;  // Blur strength (0-100, similar to WezTerm)
+// Transparency and blur settings - defaults from config_constants.h
+bool ENABLE_TRANSPARENCY = ConfigDefaults::ENABLE_TRANSPARENCY_DEFAULT;
+float WINDOW_TRANSPARENCY = ConfigDefaults::WINDOW_TRANSPARENCY_DEFAULT;
+int MACOS_BLUR_MATERIAL = ConfigDefaults::MACOS_BLUR_MATERIAL_DEFAULT;  // NSVisualEffectMaterialUnderWindowBackground
+float PDF_BACKGROUND_ALPHA = ConfigDefaults::PDF_BACKGROUND_ALPHA_DEFAULT;  // Opacity for PDF background (0.0 = fully transparent, 1.0 = fully opaque)
+int MACOS_BLUR_AMOUNT = ConfigDefaults::MACOS_BLUR_AMOUNT_DEFAULT;  // Blur strength (0-100, similar to WezTerm)
+int MACOS_BLUR_BLEND_MODE = ConfigDefaults::MACOS_BLUR_BLEND_MODE_DEFAULT;  // NSVisualEffectBlendingMode
+int MACOS_BLUR_STATE = ConfigDefaults::MACOS_BLUR_STATE_DEFAULT;  // NSVisualEffectState
+float BG_THRESHOLD_LOW = ConfigDefaults::BG_THRESHOLD_LOW_DEFAULT;  // Background detection threshold (low)
+float BG_THRESHOLD_HIGH = ConfigDefaults::BG_THRESHOLD_HIGH_DEFAULT;  // Background detection threshold (high)
+float DARK_MODE_BG_THRESHOLD_LOW = ConfigDefaults::DARK_MODE_BG_THRESHOLD_LOW_DEFAULT;  // Dark mode background threshold (low)
+float DARK_MODE_BG_THRESHOLD_HIGH = ConfigDefaults::DARK_MODE_BG_THRESHOLD_HIGH_DEFAULT;  // Dark mode background threshold (high)
+float UI_BACKGROUND_ALPHA = ConfigDefaults::UI_BACKGROUND_ALPHA_DEFAULT;  // UI elements background opacity (status bar, input fields, modals)
+float UI_SELECTED_ALPHA = ConfigDefaults::UI_SELECTED_ALPHA_DEFAULT;  // Selected items background opacity
 int TEXT_SUMMARY_CONTEXT_SIZE = 49;
 float VISUAL_MARK_NEXT_PAGE_FRACTION = 0.25f;
 float VISUAL_MARK_NEXT_PAGE_THRESHOLD = 0.1f;
@@ -319,7 +326,25 @@ QStringList convert_arguments(QStringList input_args){
 
 void configure_paths(){
 
-	Path parent_path(QCoreApplication::applicationDirPath().toStdWString());
+	Path parent_path;
+	const char* resource_dir_env = std::getenv("OPUSREADER_RESOURCE_DIR");
+	if (resource_dir_env && resource_dir_env[0] != '\0') {
+		parent_path = Path(utf8_decode(resource_dir_env));
+	}
+	else {
+		Path app_dir(QCoreApplication::applicationDirPath().toStdWString());
+		Path bundle_resources = app_dir.file_parent().slash(L"Resources").slash(L"resources");
+		Path share_resources = app_dir.file_parent().slash(L"share").slash(L"resources");
+		if (bundle_resources.dir_exists()) {
+			parent_path = bundle_resources;
+		}
+		else if (share_resources.dir_exists()) {
+			parent_path = share_resources;
+		}
+		else {
+			parent_path = app_dir;
+		}
+	}
 	std::string exe_path = utf8_encode(QCoreApplication::applicationFilePath().toStdWString());
 
 	shader_path = parent_path.slash(L"shaders");
@@ -347,8 +372,8 @@ void configure_paths(){
 	Path read_only_data_path = Path(L"/usr/share/opusreader");
 	standard_data_path.create_directories();
 
-	default_config_path = standard_config_path.slash(L"prefs.config");
-	default_keys_path = standard_config_path.slash(L"keys.config");
+	default_config_path = standard_config_path.slash(L"opusreader.config");
+	default_keys_path = default_config_path;
 
 	database_file_path = standard_data_path.slash(L"test.db");
 	local_database_file_path = standard_data_path.slash(L"local.db");
@@ -368,11 +393,8 @@ void configure_paths(){
 	standard_data_path = standard_data_path.slash(L".local").slash(L"share").slash(L"OpusReader");
 	standard_data_path.create_directories();
 
-	default_config_path = parent_path.slash(L"prefs.config");
-	//user_config_path = standard_data_path.slash(L"prefs_user.config");
-	user_config_paths.push_back(standard_data_path.slash(L"prefs_user.config"));
-	default_keys_path = parent_path.slash(L"keys.config");
-	user_keys_paths.push_back(standard_data_path.slash(L"keys_user.config"));
+	default_config_path = parent_path.slash(L"opusreader.config");
+	default_keys_path = default_config_path;
 	database_file_path = standard_data_path.slash(L"test.db");
 	local_database_file_path = standard_data_path.slash(L"local.db");
 	global_database_file_path = standard_data_path.slash(L"shared.db");
@@ -398,8 +420,8 @@ void configure_paths(){
 
 	standard_data_path.create_directories();
 
-	default_config_path = parent_path.slash(L"prefs.config");
-	default_keys_path = parent_path.slash(L"keys.config");
+	default_config_path = parent_path.slash(L"opusreader.config");
+	default_keys_path = default_config_path;
 	tutorial_path = parent_path.slash(L"tutorial.pdf");
 
 #ifdef NON_PORTABLE
@@ -423,7 +445,18 @@ void configure_paths(){
 #endif
 
 #endif
-	auto_config_path = standard_data_path.slash(L"auto.config");
+	default_config_path = parent_path.slash(L"opusreader.config");
+	default_keys_path = default_config_path;
+	tutorial_path = parent_path.slash(L"tutorial.pdf");
+	user_config_paths.clear();
+	user_keys_paths.clear();
+	Path state_dir = parent_path.slash(L"state");
+	state_dir.create_directories();
+	database_file_path = state_dir.slash(L"test.db");
+	local_database_file_path = state_dir.slash(L"local.db");
+	global_database_file_path = state_dir.slash(L"shared.db");
+	last_opened_file_address_path = state_dir.slash(L"last_document_path.txt");
+	auto_config_path = state_dir.slash(L"auto.config");
 	// user_config_paths.insert(user_config_paths.begin(), auto_config_path);
 }
 
@@ -719,6 +752,7 @@ int main(int argc, char* args[]) {
 	QSurfaceFormat format;
 	format.setVersion(3, 3);
 	format.setProfile(QSurfaceFormat::CoreProfile);
+	format.setAlphaBufferSize(8);  // Enable alpha channel for transparency
 	QSurfaceFormat::setDefaultFormat(format);
 
 	QCoreApplication::setAttribute(Qt::AA_ShareOpenGLContexts, true);

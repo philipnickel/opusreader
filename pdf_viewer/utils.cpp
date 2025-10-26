@@ -23,6 +23,8 @@
 #include <qnetworkaccessmanager.h>
 #include <qnetworkrequest.h>
 #include <qnetworkreply.h>
+#include <qjsondocument.h>
+#include <qjsonobject.h>
 #include <qscreen.h>
 #include <QKeyEvent>
 #include <QtGlobal>
@@ -39,6 +41,8 @@ extern float UI_SELECTED_TEXT_COLOR[3];
 extern float UI_SELECTED_BACKGROUND_COLOR[3];
 extern bool NUMERIC_TAGS;
 extern bool ENABLE_TRANSPARENCY;
+extern float UI_BACKGROUND_ALPHA;
+extern float UI_SELECTED_ALPHA;
 
 #ifdef Q_OS_WIN
 #include <windows.h>
@@ -119,9 +123,25 @@ bool rects_intersect(fz_rect rect1, fz_rect rect2) {
 	return range_intersects(rect1.x0, rect1.x1, rect2.x0, rect2.x1) && range_intersects(rect1.y0, rect1.y1, rect2.y0, rect2.y1);
 }
 
-ParsedUri parse_uri(fz_context* mupdf_context, std::string uri) {
-	fz_link_dest dest = pdf_parse_link_uri(mupdf_context, uri.c_str());
-	return { dest.loc.page + 1, dest.x, dest.y };
+ParsedUri parse_uri(fz_context* mupdf_context, fz_document* document, const std::string& uri) {
+	ParsedUri result{ 1, 0.0f, 0.0f };
+	if (mupdf_context == nullptr || document == nullptr) {
+		return result;
+	}
+
+	fz_try(mupdf_context) {
+		fz_link_dest dest = fz_resolve_link_dest(mupdf_context, document, uri.c_str());
+		if (dest.loc.page >= 0) {
+			result.page = dest.loc.page + 1;
+			result.x = dest.x;
+			result.y = dest.y;
+		}
+	}
+	fz_catch(mupdf_context) {
+		// Ignore parse failures; default result stays {1, 0, 0}
+	}
+
+	return result;
 }
 
 char get_symbol(int key, bool is_shift_pressed, const std::vector<char>& special_symbols) {
@@ -176,6 +196,7 @@ void copy_to_clipboard(const std::wstring& text, bool selection) {
 
 void install_app(const char *argv0)
 {
+	(void)argv0;
 #ifdef Q_OS_WIN
 	char buf[512];
 	HKEY software, classes, testpdf, dotpdf;
@@ -858,16 +879,19 @@ void run_command(std::wstring command, QStringList parameters, bool wait){
 	QStringList qparameters;
 
 	QObject::connect(process, &QProcess::errorOccurred, [process](QProcess::ProcessError error) {
+		(void)error;
 		auto msg = process->errorString().toStdWString();
 		show_error_message(msg);
 	});
 
-	QObject::connect(process, qOverload<int, QProcess::ExitStatus >(&QProcess::finished), [process](int exit_code, QProcess::ExitStatus stat) {
+	QObject::connect(process, qOverload<int, QProcess::ExitStatus>(&QProcess::finished), [process](int exit_code, QProcess::ExitStatus stat) {
+		(void)exit_code;
+		(void)stat;
 		process->deleteLater();
 	});
 
-	for (int i = 0; i < parameters.size(); i++) {
-		qparameters.append(parameters[i]);
+	for (const auto& param : parameters) {
+		qparameters.append(param);
 	}
 	//qparameters.append(QString::fromStdWString(parameters));
 
@@ -1071,7 +1095,7 @@ void index_generic(const std::vector<fz_stext_char*>& flat_chars, int page_numbe
 		}
 	}
 
-	std::wregex index_dst_regex(L"(^|\n)[A-Z][a-zA-Z]{2,}[ \t]+[0-9]+(\.[0-9]+)*");
+	std::wregex index_dst_regex(LR"((^|\n)[A-Z][a-zA-Z]{2,}[ \t]+[0-9]+(\.[0-9]+)*)");
 	//std::wregex index_dst_regex(L"(^|\n)[A-Z][a-zA-Z]{2,}[ \t]+[0-9]+(\-[0-9]+)*");
 	//std::wregex index_src_regex(L"[a-zA-Z]{3,}[ \t]+[0-9]+(\.[0-9]+)*");
 	std::wsmatch match;
@@ -1483,8 +1507,8 @@ QByteArray serialize_string_array(const QStringList& string_list) {
 	QByteArray result;
 	QDataStream stream(&result, QIODevice::WriteOnly);
 	stream << static_cast<int>(string_list.size());
-	for (int i = 0; i < string_list.size(); i++) {
-		stream << string_list.at(i);
+	for (const auto& entry : string_list) {
+		stream << entry;
 	}
 	return result;
 }
@@ -1641,8 +1665,7 @@ std::wstring concatenate_path(const std::wstring& prefix, const std::wstring& su
 
 std::wstring get_canonical_path(const std::wstring& path) {
 	QDir dir(QString::fromStdWString(path));
-	//return std::move(dir.canonicalPath().toStdWString());
-	return std::move(dir.absolutePath().toStdWString());
+	return dir.absolutePath().toStdWString();
 
 }
 
@@ -1700,32 +1723,64 @@ float type_name_similarity_score(std::wstring name1, std::wstring name2) {
 
 void check_for_updates(QWidget* parent, std::string current_version) {
 
-	QString url = "https://github.com/ahrm/opusreader/releases/latest";
-	QNetworkAccessManager* manager = new QNetworkAccessManager;
+	const QUrl api_url("https://api.github.com/repos/philipnickel/opusreader/releases/latest");
+	QNetworkRequest request(api_url);
+	request.setRawHeader("Accept", "application/vnd.github+json");
+	request.setRawHeader("User-Agent", "OpusReader");
 
-	QObject::connect(manager, &QNetworkAccessManager::finished, [=](QNetworkReply *reply) {
-		std::string response_text = reply->readAll().toStdString();
-		int first_index = response_text.find("\"");
-		int last_index = response_text.rfind("\"");
-		std::string url_string = response_text.substr(first_index + 1, last_index - first_index - 1);
+	QNetworkAccessManager* manager = new QNetworkAccessManager(parent);
 
-		std::vector<std::wstring> parts;
-		split_path(utf8_decode(url_string), parts);
-		if (parts.size() > 0) {
-			std::string version_string = utf8_encode(parts.back().substr(1, parts.back().size() - 1));
+	QObject::connect(manager, &QNetworkAccessManager::finished, parent, [=](QNetworkReply* reply) {
+		reply->deleteLater();
+		manager->deleteLater();
 
-			if (version_string != current_version) {
-				int ret = QMessageBox::information(parent, "Update", QString::fromStdString("Do you want to update from " + current_version + " to " + version_string + "?"),
-					QMessageBox::Ok | QMessageBox::Cancel,
-					QMessageBox::Cancel);
-				if (ret == QMessageBox::Ok) {
-					open_web_url(url);
-				}
-			}
-
+		if (reply->error() != QNetworkReply::NoError) {
+			return;
 		}
-		});
-	manager->get(QNetworkRequest(QUrl(url)));
+
+		const QJsonDocument json_doc = QJsonDocument::fromJson(reply->readAll());
+		if (!json_doc.isObject()) {
+			return;
+		}
+
+		const QJsonObject json_obj = json_doc.object();
+		const QString tag_name = json_obj.value("tag_name").toString();
+		const QString html_url = json_obj.value("html_url").toString();
+
+		if (tag_name.isEmpty() || html_url.isEmpty()) {
+			return;
+		}
+
+		auto normalize_version = [](QString version) {
+			version = version.trimmed();
+			if (version.startsWith('v') || version.startsWith('V')) {
+				version.remove(0, 1);
+			}
+			return version;
+		};
+
+		const QString current = normalize_version(QString::fromStdString(current_version));
+		const QString latest = normalize_version(tag_name);
+
+		if (current.isEmpty() || latest.isEmpty() || current == latest) {
+			return;
+		}
+
+		const QString message = QStringLiteral("Do you want to update from %1 to %2?")
+			.arg(current, latest);
+		const int ret = QMessageBox::information(
+			parent,
+			QStringLiteral("Update"),
+			message,
+			QMessageBox::Ok | QMessageBox::Cancel,
+			QMessageBox::Cancel);
+
+		if (ret == QMessageBox::Ok) {
+			open_web_url(html_url.toStdWString());
+		}
+	});
+
+	manager->get(request);
 }
 
 QString expand_home_dir(QString path) {
@@ -1771,15 +1826,16 @@ void split_root_file(QString path, QString& out_root, QString& out_partial) {
 
 std::wstring lowercase(const std::wstring& input) {
 
-	std::wstring res;
-	for (int i = 0; i < input.size(); i++) {
-		if ((input[i] >= 'A') && (input[i] <= 'Z')) {
-			res.push_back(input[i] + 'a' - 'A');
-		}
-		else {
-			res.push_back(input[i]);
-		}
-	}
+    std::wstring res;
+    res.reserve(input.size());
+    for (wchar_t ch : input) {
+        if ((ch >= L'A') && (ch <= L'Z')) {
+            res.push_back(ch + L'a' - L'A');
+        }
+        else {
+            res.push_back(ch);
+        }
+    }
 	return res;
 }
 
@@ -1852,10 +1908,10 @@ std::vector<fz_quad> quads_from_rects(const std::vector<fz_rect>& rects) {
 std::wifstream open_wifstream(const std::wstring& file_name) {
 
 #ifdef Q_OS_WIN
-	return std::move(std::wifstream(file_name));
+	return std::wifstream(file_name);
 #else
 	std::string encoded_file_name = utf8_encode(file_name);
-	return std::move(std::wifstream(encoded_file_name.c_str()));
+	return std::wifstream(encoded_file_name.c_str());
 #endif
 }
 
@@ -1928,6 +1984,7 @@ Range merge_range(Range range1, Range range2) {
 }
 
 float line_num_penalty(int num) {
+    (void)num;
 	return 1.0f;
 	//if (num == 1) {
 	//	return 1.0f;
@@ -2105,15 +2162,15 @@ void merge_lines(const std::vector<fz_stext_line*>& lines_, std::vector<fz_rect>
 }
 
 float get_max_display_scaling() {
-	float scale = 1.0f;
-	auto screens = QGuiApplication::screens();
-	for (int i = 0; i < screens.size(); i++) {
-		float display_scale = screens.at(i)->devicePixelRatio();
-		if (display_scale > scale) {
-			scale = display_scale;
-		}
-	}
-	return scale;
+    float scale = 1.0f;
+    const auto screens = QGuiApplication::screens();
+    for (const auto* screen : screens) {
+        float display_scale = screen->devicePixelRatio();
+        if (display_scale > scale) {
+            scale = display_scale;
+        }
+    }
+    return scale;
 }
 
 int lcs(const char* X, const char* Y, int m, int n)
@@ -2146,14 +2203,14 @@ int lcs(const char* X, const char* Y, int m, int n)
 }
 
 bool command_requires_text(const std::wstring& command) {
-	if ((command.find(L"%5") != -1) || (command.find(L"command_text") != -1)) {
+	if ((command.find(L"%5") != std::wstring::npos) || (command.find(L"command_text") != std::wstring::npos)) {
 		return true;
 	}
 	return false;
 }
 
 bool command_requires_rect(const std::wstring& command) {
-	if (command.find(L"%{selected_rect}") != -1) {
+	if (command.find(L"%{selected_rect}") != std::wstring::npos) {
 		return true;
 	}
 	return false;
@@ -2199,9 +2256,9 @@ int get_status_bar_height() {
 void flat_char_prism(const std::vector<fz_stext_char*> chars, int page, std::wstring& output_text, std::vector<int>& pages, std::vector<fz_rect>& rects) {
 	fz_stext_char* last_char = nullptr;
 
-	for (int j = 0; j < chars.size(); j++) {
-		if (is_line_separator(last_char, chars[j])) {
-			if (last_char->c == '-') {
+    for (size_t j = 0; j < chars.size(); ++j) {
+        if (is_line_separator(last_char, chars[j])) {
+            if (last_char->c == '-') {
 				pages.pop_back();
 				rects.pop_back();
 				output_text.pop_back();
@@ -2223,11 +2280,12 @@ QString get_status_stylesheet(bool nofont) {
     // Create semi-transparent background with blur for UI elements
     QString transparency_style = "";
     if (ENABLE_TRANSPARENCY) {
-        // Use rgba for transparency support
-        transparency_style = QString("background: rgba(%1, %2, %3, 0.75);")
+        // Use rgba for transparency support with configurable alpha
+        transparency_style = QString("background: rgba(%1, %2, %3, %4);")
             .arg(int(STATUS_BAR_COLOR[0] * 255))
             .arg(int(STATUS_BAR_COLOR[1] * 255))
-            .arg(int(STATUS_BAR_COLOR[2] * 255));
+            .arg(int(STATUS_BAR_COLOR[2] * 255))
+            .arg(UI_BACKGROUND_ALPHA);
     } else {
         transparency_style = QString("background-color: %1;")
             .arg(get_color_qml_string(STATUS_BAR_COLOR[0], STATUS_BAR_COLOR[1], STATUS_BAR_COLOR[2]));
@@ -2245,13 +2303,14 @@ QString get_status_stylesheet(bool nofont) {
 }
 
 QString get_selected_stylesheet(bool nofont) {
-    // Create semi-transparent background for selected items
+    // Create semi-transparent background for selected items with configurable alpha
     QString transparency_style = "";
     if (ENABLE_TRANSPARENCY) {
-        transparency_style = QString("background: rgba(%1, %2, %3, 0.75);")
+        transparency_style = QString("background: rgba(%1, %2, %3, %4);")
             .arg(int(UI_SELECTED_BACKGROUND_COLOR[0] * 255))
             .arg(int(UI_SELECTED_BACKGROUND_COLOR[1] * 255))
-            .arg(int(UI_SELECTED_BACKGROUND_COLOR[2] * 255));
+            .arg(int(UI_SELECTED_BACKGROUND_COLOR[2] * 255))
+            .arg(UI_SELECTED_ALPHA);
     } else {
         transparency_style = QString("background-color: %1;")
             .arg(get_color_qml_string(UI_SELECTED_BACKGROUND_COLOR[0], UI_SELECTED_BACKGROUND_COLOR[1], UI_SELECTED_BACKGROUND_COLOR[2]));

@@ -1,5 +1,6 @@
 #include "config.h"
 #include "utils.h"
+#include "config_constants.h"
 #include <cassert>
 #include <map>
 #include <qdir.h>
@@ -54,6 +55,8 @@ extern float STATUS_BAR_TEXT_COLOR[3];
 extern float UI_SELECTED_TEXT_COLOR[3];
 extern float UI_SELECTED_BACKGROUND_COLOR[3];
 extern int STATUS_BAR_FONT_SIZE;
+extern bool STATUS_BAR_COLOR_OVERRIDDEN;
+extern bool STATUS_BAR_TEXT_COLOR_OVERRIDDEN;
 extern int MAIN_WINDOW_SIZE[2];
 extern int HELPER_WINDOW_SIZE[2];
 extern int MAIN_WINDOW_MOVE[2];
@@ -131,6 +134,14 @@ extern float WINDOW_TRANSPARENCY;
 extern int MACOS_BLUR_MATERIAL;
 extern float PDF_BACKGROUND_ALPHA;
 extern int MACOS_BLUR_AMOUNT;
+extern int MACOS_BLUR_BLEND_MODE;
+extern int MACOS_BLUR_STATE;
+extern float BG_THRESHOLD_LOW;
+extern float BG_THRESHOLD_HIGH;
+extern float DARK_MODE_BG_THRESHOLD_LOW;
+extern float DARK_MODE_BG_THRESHOLD_HIGH;
+extern float UI_BACKGROUND_ALPHA;
+extern float UI_SELECTED_ALPHA;
 
 template<typename T>
 void* generic_deserializer(std::wstringstream& stream, void* res_) {
@@ -231,6 +242,16 @@ void* colorn_deserializer(std::wstringstream& stream, void* res_) {
 	return res;
 }
 
+void* status_bar_color_deserializer(std::wstringstream& stream, void* res_) {
+	STATUS_BAR_COLOR_OVERRIDDEN = true;
+	return colorn_deserializer<3>(stream, res_);
+}
+
+void* status_bar_text_color_deserializer(std::wstringstream& stream, void* res_) {
+	STATUS_BAR_TEXT_COLOR_OVERRIDDEN = true;
+	return colorn_deserializer<3>(stream, res_);
+}
+
 void float_serializer(void* float_pointer, std::wstringstream& stream) {
 	stream << *(float*)float_pointer;
 }
@@ -328,13 +349,14 @@ bool bool_validator(const std::wstring& str) {
 ConfigManager::ConfigManager(const Path& default_path, const Path& auto_path ,const std::vector<Path>& user_paths) {
 
 	user_config_paths = user_paths;
+	STATUS_BAR_COLOR_OVERRIDDEN = false;
+	STATUS_BAR_TEXT_COLOR_OVERRIDDEN = false;
 	auto ivec2_serializer = vec_n_serializer<2, int>;
 	auto ivec2_deserializer = vec_n_deserializer<2, int>;
 	auto fvec2_serializer = vec_n_serializer<2, float>;
 	auto fvec2_deserializer = vec_n_deserializer<2, float>;
 	auto vec3_serializer = vec_n_serializer<3, float>;
 	auto vec4_serializer = vec_n_serializer<4, float>;
-	auto vec3_deserializer = vec_n_deserializer<3, float>;
 	auto vec4_deserializer = vec_n_deserializer<4, float>;
 	auto float_deserializer = generic_deserializer<float>;
 	auto int_deserializer = generic_deserializer<int>;
@@ -362,6 +384,14 @@ ConfigManager::ConfigManager(const Path& default_path, const Path& auto_path ,co
 	configs.push_back({ L"macos_blur_material", &MACOS_BLUR_MATERIAL, int_serializer, int_deserializer, nullptr });
 	configs.push_back({ L"pdf_background_alpha", &PDF_BACKGROUND_ALPHA, float_serializer, float_deserializer, nullptr });
 	configs.push_back({ L"macos_blur_amount", &MACOS_BLUR_AMOUNT, int_serializer, int_deserializer, nullptr });
+	configs.push_back({ L"macos_blur_blend_mode", &MACOS_BLUR_BLEND_MODE, int_serializer, int_deserializer, nullptr });
+	configs.push_back({ L"macos_blur_state", &MACOS_BLUR_STATE, int_serializer, int_deserializer, nullptr });
+	configs.push_back({ L"bg_threshold_low", &BG_THRESHOLD_LOW, float_serializer, float_deserializer, nullptr });
+	configs.push_back({ L"bg_threshold_high", &BG_THRESHOLD_HIGH, float_serializer, float_deserializer, nullptr });
+	configs.push_back({ L"dark_mode_bg_threshold_low", &DARK_MODE_BG_THRESHOLD_LOW, float_serializer, float_deserializer, nullptr });
+	configs.push_back({ L"dark_mode_bg_threshold_high", &DARK_MODE_BG_THRESHOLD_HIGH, float_serializer, float_deserializer, nullptr });
+	configs.push_back({ L"ui_background_alpha", &UI_BACKGROUND_ALPHA, float_serializer, float_deserializer, nullptr });
+	configs.push_back({ L"ui_selected_alpha", &UI_SELECTED_ALPHA, float_serializer, float_deserializer, nullptr });
 	configs.push_back({ L"google_scholar_address", &GOOGLE_SCHOLAR_ADDRESS, string_serializer, string_deserializer, nullptr });
 	configs.push_back({ L"item_list_prefix", &ITEM_LIST_PREFIX, string_serializer, string_deserializer, nullptr });
 	configs.push_back({ L"inverse_search_command", &INVERSE_SEARCH_COMMAND, string_serializer, string_deserializer, nullptr });
@@ -396,8 +426,8 @@ ConfigManager::ConfigManager(const Path& default_path, const Path& auto_path ,co
 	configs.push_back({ L"wheel_zoom_on_cursor", &WHEEL_ZOOM_ON_CURSOR, bool_serializer, bool_deserializer, bool_validator });
 	configs.push_back({ L"linear_filter", &LINEAR_TEXTURE_FILTERING, bool_serializer, bool_deserializer, bool_validator });
 	configs.push_back({ L"display_resolution_scale", &DISPLAY_RESOLUTION_SCALE, float_serializer, float_deserializer, nullptr });
-	configs.push_back({ L"status_bar_color", STATUS_BAR_COLOR, vec3_serializer, color3_deserializer, color_3_validator });
-	configs.push_back({ L"status_bar_text_color", STATUS_BAR_TEXT_COLOR, vec3_serializer, color3_deserializer, color_3_validator });
+	configs.push_back({ L"status_bar_color", STATUS_BAR_COLOR, vec3_serializer, status_bar_color_deserializer, color_3_validator });
+	configs.push_back({ L"status_bar_text_color", STATUS_BAR_TEXT_COLOR, vec3_serializer, status_bar_text_color_deserializer, color_3_validator });
 	configs.push_back({ L"main_window_size", &MAIN_WINDOW_SIZE, ivec2_serializer, ivec2_deserializer, nullptr });
 	configs.push_back({ L"helper_window_size", &HELPER_WINDOW_SIZE, ivec2_serializer, ivec2_deserializer, nullptr });
 	configs.push_back({ L"main_window_move", &MAIN_WINDOW_MOVE, ivec2_serializer, ivec2_deserializer, nullptr });
@@ -455,8 +485,8 @@ ConfigManager::ConfigManager(const Path& default_path, const Path& auto_path ,co
 	configs.push_back({ L"show_document_name_in_statusbar", &SHOW_DOCUMENT_NAME_IN_STATUSBAR, bool_serializer, bool_deserializer, bool_validator });
 	configs.push_back({ L"ui_selected_background_color", UI_SELECTED_BACKGROUND_COLOR, vec3_serializer, color3_deserializer, color_3_validator });
 	configs.push_back({ L"ui_selected_text_color", UI_SELECTED_TEXT_COLOR, vec3_serializer, color3_deserializer, color_3_validator });
-	configs.push_back({ L"ui_background_color", STATUS_BAR_COLOR, vec3_serializer, color3_deserializer, color_3_validator });
-	configs.push_back({ L"ui_text_color", STATUS_BAR_TEXT_COLOR, vec3_serializer, color3_deserializer, color_3_validator });
+	configs.push_back({ L"ui_background_color", STATUS_BAR_COLOR, vec3_serializer, status_bar_color_deserializer, color_3_validator });
+	configs.push_back({ L"ui_text_color", STATUS_BAR_TEXT_COLOR, vec3_serializer, status_bar_text_color_deserializer, color_3_validator });
 	configs.push_back({ L"numeric_tags", &NUMERIC_TAGS, bool_serializer, bool_deserializer, bool_validator });
 	configs.push_back({ L"highlight_links", &SHOULD_HIGHLIGHT_LINKS, bool_serializer, bool_deserializer, bool_validator });
 	configs.push_back({ L"should_highlight_unselected_search", &SHOULD_HIGHLIGHT_UNSELECTED_SEARCH, bool_serializer, bool_deserializer, bool_validator });
@@ -489,6 +519,24 @@ ConfigManager::ConfigManager(const Path& default_path, const Path& auto_path ,co
 	}
 
 	deserialize(default_path, auto_path, user_paths);
+
+	if (!STATUS_BAR_COLOR_OVERRIDDEN) {
+		for (int i = 0; i < 3; ++i) {
+			STATUS_BAR_COLOR[i] = BACKGROUND_COLOR[i];
+		}
+	}
+
+	if (!STATUS_BAR_TEXT_COLOR_OVERRIDDEN) {
+		const float luminance =
+			ConfigDefaults::LUMINANCE_R * STATUS_BAR_COLOR[0] +
+			ConfigDefaults::LUMINANCE_G * STATUS_BAR_COLOR[1] +
+			ConfigDefaults::LUMINANCE_B * STATUS_BAR_COLOR[2];
+
+		const float default_text = (luminance > 0.5f) ? 0.0f : 1.0f;
+		for (int i = 0; i < 3; ++i) {
+			STATUS_BAR_TEXT_COLOR[i] = default_text;
+		}
+	}
 }
 
 //void ConfigManager::serialize(std::wofstream& file) {
@@ -504,18 +552,46 @@ ConfigManager::ConfigManager(const Path& default_path, const Path& auto_path ,co
 
 void ConfigManager::deserialize_file(const Path& file_path, bool warn_if_not_exists) {
 
-	std::wstring line;
 	std::wifstream default_file = open_wifstream(file_path.get_path());
-	int line_number = 0;
-
 	if (warn_if_not_exists && (!default_file.good())) {
 		std::wcout << "Error: Could not open config file " << file_path.get_path() << std::endl;
 	}
 
+	auto trim = [](const std::wstring& str) -> std::wstring {
+		const std::wstring whitespace = L" \t\n\r";
+		const auto start = str.find_first_not_of(whitespace);
+		if (start == std::wstring::npos) {
+			return L"";
+		}
+		const auto end = str.find_last_not_of(whitespace);
+		return str.substr(start, end - start + 1);
+	};
+
+	std::wstring line;
+	int line_number = 0;
+	bool section_marker_seen = false;
+	bool in_config_section = true;
+
 	while (std::getline(default_file, line)) {
 		line_number++;
 
-		if (line.size() == 0 || line[0] == '#') {
+		std::wstring trimmed_line = trim(line);
+		if (trimmed_line.rfind(L"#%%", 0) == 0) {
+			section_marker_seen = true;
+			if (trimmed_line.find(L"keys") != std::wstring::npos) {
+				in_config_section = false;
+			}
+			else {
+				in_config_section = true;
+			}
+			continue;
+		}
+
+		if (section_marker_seen && !in_config_section) {
+			continue;
+		}
+
+		if (trimmed_line.empty() || trimmed_line[0] == '#') {
 			continue;
 		}
 

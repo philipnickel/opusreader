@@ -92,11 +92,20 @@ protected:
 		}
 
 		resize(300, 800);
+
+		// Enable transparency for modal widgets
+		setAutoFillBackground(false);
+		setAttribute(Qt::WA_TranslucentBackground);
+
 		QVBoxLayout* layout = new QVBoxLayout;
 		setLayout(layout);
 
 		line_edit = new QLineEdit;
+		line_edit->setAutoFillBackground(false);
+
 		abstract_item_view = new ViewType;
+		abstract_item_view->setAutoFillBackground(false);
+		abstract_item_view->viewport()->setAutoFillBackground(false);  // Make viewport transparent too
 		abstract_item_view->setModel(proxy_model);
 		abstract_item_view->setEditTriggers(QAbstractItemView::NoEditTriggers);
 
@@ -179,14 +188,12 @@ public:
 
 	bool eventFilter(QObject* obj, QEvent* event) override {
 		if (obj == line_edit) {
-#ifdef OPUSREADER_QT6
 			if (event->type() == QEvent::KeyRelease) {
 				QKeyEvent* key_event = static_cast<QKeyEvent*>(event);
 				if (should_trigger_delete(key_event)) {
 					handle_delete();
 				}
 			}
-#endif
 			if (event->type() == QEvent::KeyPress) {
 				QKeyEvent* key_event = static_cast<QKeyEvent*>(event);
 				bool is_control_pressed = key_event->modifiers().testFlag(Qt::ControlModifier) || key_event->modifiers().testFlag(Qt::MetaModifier);
@@ -197,11 +204,7 @@ public:
 					key_event->key() == Qt::Key_Left ||
 					key_event->key() == Qt::Key_Right
 					) {
-#ifdef OPUSREADER_QT6
 					QKeyEvent* newEvent = key_event->clone();
-#else
-					QKeyEvent* newEvent = new QKeyEvent(*key_event);
-#endif
 					QCoreApplication::postEvent(get_view(), newEvent);
 					//QCoreApplication::postEvent(tree_view, key_event);
 					return true;
@@ -291,15 +294,6 @@ public:
 			}
 		}
 	}
-
-#ifndef OPUSREADER_QT6
-	void keyReleaseEvent(QKeyEvent* event) override {
-		if (should_trigger_delete(event)) {
-			handle_delete();
-		}
-		QWidget::keyReleaseEvent(event);
-	}
-#endif
 
 	virtual void on_config_file_changed() {
 		QString font_size_stylesheet = "";

@@ -6,15 +6,20 @@ in vec2 uvs;
 uniform sampler2D pdf_texture;
 uniform mat4 transform_matrix;
 uniform float transparency;
+uniform float bg_threshold_low;   // Background detection threshold (low)
+uniform float bg_threshold_high;  // Background detection threshold (high)
+
+// Luminance coefficients (Rec. 601 standard)
+const vec3 luminance_coeffs = vec3(0.299, 0.587, 0.114);
 
 void main(){
     // Get original PDF color (before transformation)
     vec3 original_rgb = texture(pdf_texture, uvs).rgb;
-    
+
     // Detect text vs background on ORIGINAL PDF colors
     // In original PDF: text is dark, background is light
-    float original_luminance = dot(original_rgb, vec3(0.299, 0.587, 0.114));
-    float backgroundFactor = smoothstep(0.3, 0.7, original_luminance);
+    float original_luminance = dot(original_rgb, luminance_coeffs);
+    float backgroundFactor = smoothstep(bg_threshold_low, bg_threshold_high, original_luminance);
     
     // Apply transformation to get final colors
     vec4 pdf_color = vec4(original_rgb, 1);

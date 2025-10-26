@@ -21,17 +21,17 @@ fi
 make -j$MAKE_PARALLEL
 
 # Prepare build output directory
-rm -rf builds/opusreader.app 2> /dev/null
+rm -rf builds/OpusReader.app 2> /dev/null
 mkdir -p builds
-mv opusreader.app builds/
+mv opusreader.app builds/OpusReader.app
 
 # Copy resources to app bundle
-cp -r pdf_viewer/shaders builds/opusreader.app/Contents/MacOS/shaders
-cp pdf_viewer/prefs.config builds/opusreader.app/Contents/MacOS/prefs.config
-cp pdf_viewer/prefs_user.config builds/opusreader.app/Contents/MacOS/prefs_user.config 2>/dev/null || echo "No prefs_user.config"
-cp pdf_viewer/keys.config builds/opusreader.app/Contents/MacOS/keys.config
-cp pdf_viewer/keys_user.config builds/opusreader.app/Contents/MacOS/keys_user.config 2>/dev/null || echo "No keys_user.config"
-cp tutorial.pdf builds/opusreader.app/Contents/MacOS/tutorial.pdf
+RESOURCES_DIR="builds/OpusReader.app/Contents/Resources/resources"
+mkdir -p "$RESOURCES_DIR"
+cp -R pdf_viewer/shaders "$RESOURCES_DIR/"
+cp pdf_viewer/opusreader.config "$RESOURCES_DIR/"
+cp tutorial.pdf "$RESOURCES_DIR/"
+mkdir -p "$RESOURCES_DIR/state"
 
 # Capture the current PATH
 CURRENT_PATH=$(echo $PATH)
@@ -44,19 +44,19 @@ INFO_PLIST="resources/Info.plist"
 /usr/libexec/PlistBuddy -c "Add :LSEnvironment:PATH string $CURRENT_PATH" "$INFO_PLIST" || /usr/libexec/PlistBuddy -c "Set :LSEnvironment:PATH $CURRENT_PATH" "$INFO_PLIST"
 
 # Run macdeployqt
-macdeployqt builds/opusreader.app -dmg
+macdeployqt builds/OpusReader.app -dmg
 
 # Code sign the application
 echo "Signing the application..."
-codesign --force --deep --sign - builds/opusreader.app
+codesign --force --deep --sign - builds/OpusReader.app
 
 # Create release zip
-zip -r builds/opusreader-release-mac.zip builds/opusreader.dmg
+zip -r builds/opusreader-release-mac.zip builds/OpusReader.dmg
 
 echo ""
 echo "========================================="
 echo "Build complete!"
-echo "App: builds/opusreader.app"
-echo "DMG: builds/opusreader.dmg"
+echo "App: builds/OpusReader.app"
+echo "DMG: builds/OpusReader.dmg"
 echo "ZIP: builds/opusreader-release-mac.zip"
 echo "========================================="

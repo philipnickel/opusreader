@@ -2,23 +2,38 @@ QMAKE_MKSPECS = /opt/homebrew/opt/qt@6/lib/qt/mkspecs
 TEMPLATE = app
 TARGET = opusreader
 VERSION = 2.0.0
-INCLUDEPATH += ./pdf_viewer\
-              mupdf/include \
-              zlib
-          
+INCLUDEPATH += ./pdf_viewer
 
-QT += core opengl gui widgets network 3dinput dbus 
-
-greaterThan(QT_MAJOR_VERSION, 5){
-	QT += openglwidgets
-	DEFINES += OPUSREADER_QT6
-}
-else{
-	QT += openglextensions
-}
+QT += core gui widgets opengl openglwidgets network 3dinput dbus
 
 CONFIG += c++17
-DEFINES += QT_3DINPUT_LIB QT_OPENGL_LIB QT_OPENGLEXTENSIONS_LIB QT_WIDGETS_LIB
+
+DEFINES += OPUSREADER_QT6
+DEFINES += QT_3DINPUT_LIB QT_OPENGL_LIB QT_WIDGETS_LIB
+
+MUPDF_CFLAGS = $$system(mupdf-config --cflags 2> /dev/null)
+isEmpty(MUPDF_CFLAGS) {
+    MUPDF_PREFIX = $$system(brew --prefix mupdf 2> /dev/null)
+    isEmpty(MUPDF_PREFIX) {
+        MUPDF_PREFIX = /opt/homebrew
+    }
+    INCLUDEPATH += $$MUPDF_PREFIX/include
+} else {
+    QMAKE_CXXFLAGS += $$MUPDF_CFLAGS
+}
+
+MUPDF_LIBS = $$system(mupdf-config --libs 2> /dev/null)
+isEmpty(MUPDF_LIBS) {
+    isEmpty(MUPDF_PREFIX) {
+        MUPDF_PREFIX = $$system(brew --prefix mupdf 2> /dev/null)
+        isEmpty(MUPDF_PREFIX) {
+            MUPDF_PREFIX = /opt/homebrew
+        }
+    }
+    LIBS += -L$$MUPDF_PREFIX/lib -L/opt/homebrew/lib -lmupdf -lmupdf-third -lz -lharfbuzz -lfreetype -ljbig2dec -ljpeg -lopenjp2 -lmujs -lgumbo
+} else {
+    LIBS += $$MUPDF_LIBS
+}
 
 CONFIG(non_portable){
     DEFINES += NON_PORTABLE
@@ -83,59 +98,14 @@ SOURCES += pdf_viewer/book.cpp \
            pdf_viewer/OpenWithApplication.cpp
 
 
-win32{
-    DEFINES += _CRT_SECURE_NO_WARNINGS _CRT_NONSTDC_NO_DEPRECATE
-    RC_ICONS = pdf_viewer\icon2.ico
-    LIBS += -Lmupdf\platform\win32\x64\Release -llibmupdf -Lzlib -lzlib
-    #LIBS += -Llibs -llibmupdf
-    LIBS += opengl32.lib
-}
-
-unix:!mac {
-
-    QMAKE_CXXFLAGS += -std=c++17
-
-    CONFIG(linux_app_image){
-        LIBS += -ldl -Lmupdf/build/release -lmupdf -lmupdf-third -lmupdf-threads -lharfbuzz -lz
-    } else {
-        DEFINES += NON_PORTABLE
-        DEFINES += LINUX_STANDARD_PATHS
-        LIBS += -ldl -lmupdf -lmupdf-third -lgumbo -lharfbuzz -lfreetype -ljbig2dec -ljpeg -lmujs -lopenjp2 -lz
-    }
-
-    isEmpty(PREFIX){
-        PREFIX = /usr
-    }
-    target.path = $$PREFIX/bin
-    shortcutfiles.files = resources/opusreader.desktop
-    shortcutfiles.path = $$PREFIX/share/applications/
-    icon.files = resources/opusreader-icon-linux.png
-    icon.path = $$PREFIX/share/pixmaps/
-    shaders.files = pdf_viewer/shaders/
-    shaders.path = $$PREFIX/share/opusreader/
-    tutorial.files = tutorial.pdf
-    tutorial.path = $$PREFIX/share/opusreader/
-    keys.files = pdf_viewer/keys.config
-    keys.path = $$PREFIX/etc/opusreader
-    prefs.files = pdf_viewer/prefs.config
-    prefs.path = $$PREFIX/etc/opusreader
-    INSTALLS += target
-    INSTALLS += shortcutfiles
-    INSTALLS += icon
-    INSTALLS += shaders
-    INSTALLS += tutorial
-    INSTALLS += keys
-    INSTALLS += prefs	
-    DISTFILES += resources/opusreader.desktop\
-        resources/opusreader-icon-linux.png
-}
-
 mac {
+    QMAKE_MACOSX_DEPLOYMENT_TARGET = 15.0
+    CONFIG += sdk_no_version_check
     QMAKE_CXXFLAGS += -std=c++17
-    LIBS += -ldl -Lmupdf/build/release -lmupdf -lmupdf-third -lz
-    CONFIG+=sdk_no_version_check
-    QMAKE_MACOSX_DEPLOYMENT_TARGET = 11
-    ICON = resources/icon.icns
-    QMAKE_INFO_PLIST = resources/Info.plist
+    CONFIG(cli_no_bundle) {
+        CONFIG -= app_bundle
+    } else {
+        ICON = resources/icon.icns
+        QMAKE_INFO_PLIST = resources/Info.plist
+    }
 }
-

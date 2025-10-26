@@ -15,6 +15,7 @@
 #include <qbytearray.h>
 #include <qdrag.h>
 #include <qscrollbar.h>
+#include <qtabbar.h>
 
 #include <mupdf/fitz.h>
 #include "document_view.h"
@@ -119,6 +120,7 @@ public:
 	QLabel* text_command_line_edit_label = nullptr;
 	QLineEdit* text_command_line_edit = nullptr;
 	QLabel* status_label = nullptr;
+	QWidget* titlebar_widget = nullptr;
 
 	bool is_render_invalidated = false;
 	bool is_ui_invalidated = false;
@@ -338,7 +340,7 @@ public:
 	int num_visible_links();
 
 	protected:
-	void focusInEvent(QFocusEvent* ev);
+	void focusInEvent(QFocusEvent* ev) override;
 	void resizeEvent(QResizeEvent* resize_event) override;
 	void changeEvent(QEvent* event) override;
 	void mouseMoveEvent(QMouseEvent* mouse_event) override;

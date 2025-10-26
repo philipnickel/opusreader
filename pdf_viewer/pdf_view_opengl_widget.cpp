@@ -1,6 +1,8 @@
 #include "pdf_view_opengl_widget.h"
 #include "path.h"
 #include <qcolor.h>
+#include <qguiapplication.h>
+#include <qscreen.h>
 #include <cmath>
 
 extern Path shader_path;
@@ -16,6 +18,11 @@ extern bool SHOULD_DRAW_UNRENDERED_PAGES;
 extern bool ENABLE_TRANSPARENCY;
 extern float WINDOW_TRANSPARENCY;
 extern float PDF_BACKGROUND_ALPHA;
+extern int MACOS_BLUR_AMOUNT;
+extern float BG_THRESHOLD_LOW;
+extern float BG_THRESHOLD_HIGH;
+extern float DARK_MODE_BG_THRESHOLD_LOW;
+extern float DARK_MODE_BG_THRESHOLD_HIGH;
 extern float CUSTOM_BACKGROUND_COLOR[3];
 extern float CUSTOM_TEXT_COLOR[3];
 extern bool RERENDER_OVERVIEW;
@@ -410,7 +417,13 @@ PdfViewOpenGLWidget::PdfViewOpenGLWidget(DocumentView* document_view, PdfRendere
 	
 	// Allow background blur to show through empty areas
 	setAttribute(Qt::WA_AlwaysStackOnTop, false);
-	setAttribute(Qt::WA_TranslucentBackground, false);  // We handle transparency at window level
+	// Enable translucent background on widget when transparency is enabled
+	if (ENABLE_TRANSPARENCY) {
+		setAttribute(Qt::WA_TranslucentBackground, true);
+		setAutoFillBackground(false);  // Don't let Qt fill background with opaque color
+	} else {
+		setAttribute(Qt::WA_TranslucentBackground, false);
+	}
 
 	overview_half_width = OVERVIEW_SIZE[0];
 	overview_half_height = OVERVIEW_SIZE[1];
@@ -671,11 +684,8 @@ void PdfViewOpenGLWidget::render_page(int page_number) {
 		document_view->get_document()->get_page_width(page_number),
 		document_view->get_document()->get_page_height(page_number) };
 
-#ifdef OPUSREADER_QT6
-	float device_pixel_ratio = static_cast<float>(QGuiApplication::primaryScreen()->devicePixelRatio());
-#else
-	float device_pixel_ratio = QApplication::desktop()->devicePixelRatioF();
-#endif
+	QScreen* primary_screen = QGuiApplication::primaryScreen();
+	float device_pixel_ratio = primary_screen ? static_cast<float>(primary_screen->devicePixelRatio()) : 1.0f;
 
 	if (DISPLAY_RESOLUTION_SCALE > 0) {
 		device_pixel_ratio *= DISPLAY_RESOLUTION_SCALE;
@@ -1316,11 +1326,7 @@ void PdfViewOpenGLWidget::draw_empty_helper_message(QPainter* painter) {
 
 	QString message = "No portals yet";
 	QFontMetrics fm(QApplication::font());
-#ifdef OPUSREADER_QT6
 	int message_width = fm.boundingRect(message).width();
-#else
-	int message_width = fm.width(message);
-#endif
 	int message_height = fm.height();
 
 	int view_width = document_view->get_view_width();
@@ -1516,16 +1522,21 @@ void PdfViewOpenGLWidget::bind_program() {
 	// Calculate transparency value for PDF background
 	// When transparency is enabled, use PDF_BACKGROUND_ALPHA for PDF background opacity
 	float pdf_transparency = ENABLE_TRANSPARENCY ? PDF_BACKGROUND_ALPHA : 1.0f;
-	
+
+	// Calculate blur amount value (convert from 0-100 range to 0.0-1.0 range)
+	float blur_amount = MACOS_BLUR_AMOUNT / 100.0f;
+
 	static bool logged = false;
 	if (!logged) {
-		std::wcout << L"[DEBUG] bind_program: ENABLE_TRANSPARENCY=" << ENABLE_TRANSPARENCY 
-		          << L", PDF_BACKGROUND_ALPHA=" << PDF_BACKGROUND_ALPHA 
-		          << L", pdf_transparency=" << pdf_transparency 
+		std::wcout << L"[DEBUG] bind_program: ENABLE_TRANSPARENCY=" << ENABLE_TRANSPARENCY
+		          << L", PDF_BACKGROUND_ALPHA=" << PDF_BACKGROUND_ALPHA
+		          << L", pdf_transparency=" << pdf_transparency
+		          << L", MACOS_BLUR_AMOUNT=" << MACOS_BLUR_AMOUNT
+		          << L", blur_amount=" << blur_amount
 		          << L", color_mode=" << static_cast<int>(color_mode) << std::endl;
 		logged = true;
 	}
-	
+
 	if (color_mode == ColorPalette::Dark) {
 		glUseProgram(shared_gl_objects.rendered_dark_program);
 		glUniform1f(shared_gl_objects.dark_mode_contrast_uniform_location, DARK_MODE_CONTRAST);
@@ -1533,6 +1544,20 @@ void PdfViewOpenGLWidget::bind_program() {
 		GLint trans_loc = glGetUniformLocation(shared_gl_objects.rendered_dark_program, "transparency");
 		if (trans_loc >= 0) {
 			glUniform1f(trans_loc, pdf_transparency);
+		}
+		// Get and set blur_amount uniform
+		GLint blur_loc = glGetUniformLocation(shared_gl_objects.rendered_dark_program, "blur_amount");
+		if (blur_loc >= 0) {
+			glUniform1f(blur_loc, blur_amount);
+		}
+		// Get and set dark mode background threshold uniforms
+		GLint threshold_low_loc = glGetUniformLocation(shared_gl_objects.rendered_dark_program, "dark_mode_bg_threshold_low");
+		if (threshold_low_loc >= 0) {
+			glUniform1f(threshold_low_loc, DARK_MODE_BG_THRESHOLD_LOW);
+		}
+		GLint threshold_high_loc = glGetUniformLocation(shared_gl_objects.rendered_dark_program, "dark_mode_bg_threshold_high");
+		if (threshold_high_loc >= 0) {
+			glUniform1f(threshold_high_loc, DARK_MODE_BG_THRESHOLD_HIGH);
 		}
 	}
 	else if (color_mode == ColorPalette::Custom) {
@@ -1550,10 +1575,33 @@ void PdfViewOpenGLWidget::bind_program() {
 		} else if (!logged) {
 			std::wcout << L"[DEBUG] WARNING: transparency uniform not found in custom_color shader!" << std::endl;
 		}
+		// Get and set background threshold uniforms
+		GLint threshold_low_loc = glGetUniformLocation(shared_gl_objects.custom_color_program, "bg_threshold_low");
+		if (threshold_low_loc >= 0) {
+			glUniform1f(threshold_low_loc, BG_THRESHOLD_LOW);
+		}
+		GLint threshold_high_loc = glGetUniformLocation(shared_gl_objects.custom_color_program, "bg_threshold_high");
+		if (threshold_high_loc >= 0) {
+			glUniform1f(threshold_high_loc, BG_THRESHOLD_HIGH);
+		}
 	}
 	else {
 		glUseProgram(shared_gl_objects.rendered_program);
 		glUniform1f(shared_gl_objects.transparency_uniform_location, pdf_transparency);
+		// Get and set blur_amount uniform
+		GLint blur_loc = glGetUniformLocation(shared_gl_objects.rendered_program, "blur_amount");
+		if (blur_loc >= 0) {
+			glUniform1f(blur_loc, blur_amount);
+		}
+		// Get and set background threshold uniforms
+		GLint threshold_low_loc = glGetUniformLocation(shared_gl_objects.rendered_program, "bg_threshold_low");
+		if (threshold_low_loc >= 0) {
+			glUniform1f(threshold_low_loc, BG_THRESHOLD_LOW);
+		}
+		GLint threshold_high_loc = glGetUniformLocation(shared_gl_objects.rendered_program, "bg_threshold_high");
+		if (threshold_high_loc >= 0) {
+			glUniform1f(threshold_high_loc, BG_THRESHOLD_HIGH);
+		}
 	}
 }
 

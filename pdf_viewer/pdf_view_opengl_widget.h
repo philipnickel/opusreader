@@ -35,10 +35,6 @@
 #include <qtextedit.h>
 #include <qfilesystemwatcher.h>
 
-#ifndef OPUSREADER_QT6
-#include <qdesktopwidget.h>
-#endif
-
 #include <qpainter.h>
 
 #include "document_view.h"

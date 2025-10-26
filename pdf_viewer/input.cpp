@@ -2637,6 +2637,19 @@ void get_keys_file_lines(const Path& file_path,
 
 	int line_number = 0;
 	std::wstring default_path_name = file_path.get_path();
+	auto trim = [](const std::wstring& str) -> std::wstring {
+		const std::wstring whitespace = L" \t\n\r";
+		const auto start = str.find_first_not_of(whitespace);
+		if (start == std::wstring::npos) {
+			return L"";
+		}
+		const auto end = str.find_last_not_of(whitespace);
+		return str.substr(start, end - start + 1);
+	};
+
+	bool section_marker_seen = false;
+	bool in_keys_section = true;
+
 	while (infile.good()) {
 		line_number++;
 		std::string line_;
@@ -2644,14 +2657,24 @@ void get_keys_file_lines(const Path& file_path,
 		std::getline(infile, line_);
 		line = utf8_decode(line_);
 
-		if (line.size() == 0 || line[0] == '#') {
+		std::wstring trimmed_line = trim(line);
+		if (trimmed_line.rfind(L"#%%", 0) == 0) {
+			section_marker_seen = true;
+			in_keys_section = trimmed_line.find(L"keys") != std::wstring::npos;
+			continue;
+		}
+
+		if (section_marker_seen && !in_keys_section) {
+			continue;
+		}
+
+		if (trimmed_line.size() == 0 || trimmed_line[0] == '#') {
 			continue;
 		}
 		std::wstringstream ss(line);
 		std::wstring command_name;
 		std::wstring command_key;
 		ss >> command_name >> command_key;
-		//command_names.push_back(utf8_encode(command_name));
 		command_names.push_back(parse_command_name(command_name));
 		command_keys.push_back(command_key);
 		command_files.push_back(default_path_name);

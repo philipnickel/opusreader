@@ -8,6 +8,7 @@
 #include <optional>
 #include <memory>
 #include <cctype>
+#include <cmath>
 
 
 #include <qscrollarea.h>
@@ -15,10 +16,6 @@
 #include <qapplication.h>
 #include <qboxlayout.h>
 #include <qdatetime.h>
-
-#ifndef OPUSREADER_QT6
-#include <qdesktopwidget.h>
-#endif
 
 #include <qkeyevent.h>
 #include <qlabel.h>
@@ -37,10 +34,12 @@
 #include <qguiapplication.h>
 #include <qmimedata.h>
 #include <qscreen.h>
+#include <qregularexpression.h>
 
 #ifdef Q_OS_MACOS
 #include <objc/objc.h>
 #include <objc/message.h>
+#include <objc/runtime.h>
 #endif
 
 
@@ -137,6 +136,11 @@ extern bool VIMTEX_WSL_FIX;
 extern bool ENABLE_TRANSPARENCY;
 extern float WINDOW_TRANSPARENCY;
 extern int MACOS_BLUR_MATERIAL;
+extern int MACOS_BLUR_BLEND_MODE;
+extern float UI_SELECTED_BACKGROUND_COLOR[3];
+extern float UI_BACKGROUND_ALPHA;
+extern float UI_SELECTED_ALPHA;
+extern int MACOS_BLUR_STATE;
 
 const int MAX_SCROLLBAR = 10000;
 
@@ -187,7 +191,8 @@ void MainWidget::set_overview_position(int page, float offset) {
 
 void MainWidget::set_overview_link(PdfLink link) {
 
-    auto [page, offset_x, offset_y] = parse_uri(mupdf_context, link.uri);
+    Document* doc_ptr = main_document_view ? main_document_view->get_document() : nullptr;
+    auto [page, offset_x, offset_y] = parse_uri(mupdf_context, doc_ptr ? doc_ptr->doc : nullptr, link.uri);
     if (page >= 1) {
         set_overview_position(page - 1, offset_y);
     }
@@ -361,12 +366,10 @@ MainWidget::MainWidget(fz_context* mupdf_context,
 
 
     inverse_search_command = INVERSE_SEARCH_COMMAND;
+    QScreen* primary_screen = QGuiApplication::primaryScreen();
+    qreal device_pixel_ratio = primary_screen ? primary_screen->devicePixelRatio() : 1.0;
     if (DISPLAY_RESOLUTION_SCALE <= 0){
-#ifdef OPUSREADER_QT6
-        pdf_renderer = new PdfRenderer(4, should_quit_ptr, mupdf_context, QGuiApplication::primaryScreen()->devicePixelRatio());
-#else
-        pdf_renderer = new PdfRenderer(4, should_quit_ptr, mupdf_context, QApplication::desktop()->devicePixelRatioF());
-#endif
+        pdf_renderer = new PdfRenderer(4, should_quit_ptr, mupdf_context, device_pixel_ratio);
     }
     else {
         pdf_renderer = new PdfRenderer(4, should_quit_ptr, mupdf_context, DISPLAY_RESOLUTION_SCALE);
@@ -489,7 +492,7 @@ MainWidget::MainWidget(fz_context* mupdf_context,
     hlayout->addWidget(scroll_bar);
 
     layout->setSpacing(0);
-    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setContentsMargins(0, 0, 0, 0);  // No margin - frameless appearance
     opengl_widget->setAttribute(Qt::WA_TransparentForMouseEvents);
     layout->addLayout(hlayout);
     setLayout(layout);
@@ -516,10 +519,17 @@ MainWidget::MainWidget(fz_context* mupdf_context,
     setMinimumWidth(500);
     setMinimumHeight(200);
     setFocus();
-    
+
+    // CRITICAL: Disable Qt's safe area margins (Qt 6.8+)
+    // This prevents Qt from adding margins for the macOS titlebar
+    setAttribute(Qt::WA_ContentsMarginsRespectsSafeArea, false);
+
+    std::cout << "=== DEBUG: Qt Attributes ===" << std::endl;
+    std::cout << "WA_ContentsMarginsRespectsSafeArea: " << testAttribute(Qt::WA_ContentsMarginsRespectsSafeArea) << std::endl;
+
     // Setup window transparency if enabled
     setup_window_transparency();
-    
+
     // Setup native frameless window
     setup_native_window();
 }
@@ -1781,24 +1791,15 @@ void MainWidget::wheelEvent(QWheelEvent* wevent) {
     bool is_visual_mark_mode = opengl_widget->get_should_draw_vertical_line() && visual_scroll_mode;
 
 
-#ifdef OPUSREADER_QT6
-    int x = wevent->position().x();
-    int y = wevent->position().y();
-#else
-    int x = wevent->pos().x();
-    int y = wevent->pos().y();
-#endif
+    const QPointF wheel_pos = wevent->position();
+    int x = static_cast<int>(wheel_pos.x());
+    int y = static_cast<int>(wheel_pos.y());
 
     WindowPos mouse_window_pos = { x, y };
     auto [normal_x, normal_y] = main_document_view->window_to_normalized_window_pos(mouse_window_pos);
 
-#ifdef OPUSREADER_QT6
-	int num_repeats = abs(wevent->angleDelta().y() / 120);
-	float num_repeats_f = abs(wevent->angleDelta().y() / 120.0);
-#else
-	int num_repeats = abs(wevent->delta() / 120);
-	float num_repeats_f = abs(wevent->delta() / 120.0);
-#endif
+	int num_repeats = std::abs(wevent->angleDelta().y() / 120);
+	float num_repeats_f = std::abs(static_cast<double>(wevent->angleDelta().y()) / 120.0);
 
     if (num_repeats == 0) {
         num_repeats = 1;
@@ -2274,11 +2275,7 @@ void MainWidget::execute_command(std::wstring command, std::wstring text, bool w
 
     qtext.arg(qfile_path);
 
-#ifdef OPUSREADER_QT6
     QStringList command_parts_ = qtext.split(QRegularExpression("\\s+"), Qt::SkipEmptyParts);
-#else
-    QStringList command_parts_ = qtext.split(QRegExp("\\s+"), QString::SkipEmptyParts);
-#endif
 
     QStringList command_parts;
     while (command_parts_.size() > 0) {
@@ -2459,13 +2456,10 @@ void MainWidget::get_window_params_for_one_window_mode(int* main_window_size, in
         main_window_move[1] = SINGLE_MAIN_WINDOW_MOVE[1];
     }
     else{
-#ifdef OPUSREADER_QT6
-        int window_width = QGuiApplication::primaryScreen()->geometry().width();
-        int window_height = QGuiApplication::primaryScreen()->geometry().height();
-#else
-        int window_width = QApplication::desktop()->screenGeometry(0).width();
-        int window_height = QApplication::desktop()->screenGeometry(0).height();
-#endif
+        QScreen* primary_screen = QGuiApplication::primaryScreen();
+        QRect screen_geometry = primary_screen ? primary_screen->geometry() : QRect(0, 0, main_window_size[0], main_window_size[1]);
+        int window_width = screen_geometry.width();
+        int window_height = screen_geometry.height();
 
         main_window_size[0] = window_width;
         main_window_size[1] = window_height;
@@ -2485,21 +2479,18 @@ void MainWidget::get_window_params_for_two_window_mode(int* main_window_size, in
         helper_window_move[1] = HELPER_WINDOW_MOVE[1];
     }
     else {
-#ifdef OPUSREADER_QT6
-        int num_screens = QGuiApplication::screens().size();
-#else
-        int num_screens = QApplication::desktop()->numScreens();
-#endif
+        const auto screens = QGuiApplication::screens();
+        int num_screens = screens.size();
         int main_window_width = get_current_monitor_width();
         int main_window_height = get_current_monitor_height();
         if (num_screens > 1) {
-#ifdef OPUSREADER_QT6
-            int second_window_width = QGuiApplication::screens().at(1)->geometry().width();
-            int second_window_height = QGuiApplication::screens().at(1)->geometry().height();
-#else
-            int second_window_width = QApplication::desktop()->screenGeometry(1).width();
-            int second_window_height = QApplication::desktop()->screenGeometry(1).height();
-#endif
+            QScreen* helper_screen = screens.at(1);
+            if (!helper_screen && !screens.isEmpty()) {
+                helper_screen = screens.first();
+            }
+            QRect helper_geometry = helper_screen ? helper_screen->geometry() : QRect();
+            int second_window_width = helper_geometry.width();
+            int second_window_height = helper_geometry.height();
             main_window_size[0] = main_window_width;
             main_window_size[1] = main_window_height;
             main_window_move[0] = 0;
@@ -2560,7 +2551,6 @@ void MainWidget::apply_window_params_for_two_window_mode() {
     QWidget* main_window = get_top_level_widget(opengl_widget);
     QWidget* helper_window = get_top_level_widget(helper_opengl_widget);
 
-    //int main_window_width = QApplication::desktop()->screenGeometry(0).width();
     int main_window_width = get_current_monitor_width();
 
     int main_window_size[2];
@@ -2794,7 +2784,8 @@ void MainWidget::handle_link_click(const PdfLink& link) {
 		return;
 	}
 
-	auto [page, offset_x, offset_y] = parse_uri(mupdf_context, link.uri);
+	Document* doc_ptr = main_document_view ? main_document_view->get_document() : nullptr;
+	auto [page, offset_x, offset_y] = parse_uri(mupdf_context, doc_ptr ? doc_ptr->doc : nullptr, link.uri);
 
 	// convert one indexed page to zero indexed page
 	page--;
@@ -2981,17 +2972,16 @@ void MainWidget::focus_text(int page, const std::wstring& text) {
     int max_score = -1;
     int max_index = -1;
 
-    for (int i = 0; i < line_texts.size(); i++) {
+    for (size_t i = 0; i < line_texts.size(); ++i) {
         std::string encoded_line = utf8_encode(line_texts[i]);
         int score = lcs(encoded_text.c_str(), encoded_line.c_str(), encoded_text.size(), encoded_line.size());
-        //fts::fuzzy_match(encoded_line.c_str(), encoded_text.c_str(), score);
         if (score > max_score) {
-            max_index = i;
+            max_index = static_cast<int>(i);
             max_score = score;
         }
     }
 
-    if (max_index < line_rects.size()) {
+    if (max_index >= 0 && static_cast<size_t>(max_index) < line_rects.size()) {
 		main_document_view->set_line_index(max_index);
 		main_document_view->set_vertical_line_rect(line_rects[max_index]);
 		if (focus_on_visual_mark_pos(true)) {
@@ -3006,11 +2996,8 @@ int MainWidget::get_current_monitor_width() {
 		return this->window()->windowHandle()->screen()->geometry().width();
     }
     else {
-#ifdef OPUSREADER_QT6
-        return QGuiApplication::primaryScreen()->geometry().width();
-#else
-		return QApplication::desktop()->screenGeometry(0).width();
-#endif
+        QScreen* primary_screen = QGuiApplication::primaryScreen();
+        return primary_screen ? primary_screen->geometry().width() : width();
     }
 }
 
@@ -3019,11 +3006,8 @@ int MainWidget::get_current_monitor_height() {
 		return this->window()->windowHandle()->screen()->geometry().height();
     }
     else {
-#ifdef OPUSREADER_QT6
-        return QGuiApplication::primaryScreen()->geometry().height();
-#else
-		return QApplication::desktop()->screenGeometry(0).height();
-#endif
+        QScreen* primary_screen = QGuiApplication::primaryScreen();
+        return primary_screen ? primary_screen->geometry().height() : height();
     }
 }
 
@@ -3943,7 +3927,7 @@ void MainWidget::handle_portal_to_link(const std::wstring& text) {
         PdfLink pdf_link;
         pdf_link.rect = link->rect;
         pdf_link.uri = link->uri;
-        ParsedUri parsed_uri = parse_uri(mupdf_context, pdf_link.uri);
+        ParsedUri parsed_uri = parse_uri(mupdf_context, doc() ? doc()->doc : nullptr, pdf_link.uri);
 
 		//AbsoluteDocumentPos abspos = doc()->document_to_absolute_pos(defpos[0], true);
         DocumentPos link_source_document_pos;
@@ -3982,7 +3966,7 @@ void MainWidget::handle_open_link(const std::wstring& text, bool copy) {
 				open_web_url(utf8_decode(selected_link->uri));
 			}
 			else {
-				auto [page, offset_x, offset_y] = parse_uri(mupdf_context, selected_link->uri);
+				auto [page, offset_x, offset_y] = parse_uri(mupdf_context, doc() ? doc()->doc : nullptr, selected_link->uri);
 				long_jump_to_destination(page - 1, offset_y);
 			}
 		}
@@ -4166,9 +4150,10 @@ void MainWidget::setup_window_transparency() {
     }
 
     std::wcout << L"[DEBUG] Setting up transparency..." << std::endl;
-    
+
     // Enable Qt window transparency - this allows blur to show through
     setAttribute(Qt::WA_TranslucentBackground);
+    setAutoFillBackground(false);  // Don't let Qt fill background with opaque color
     
 #ifdef Q_OS_MACOS
     std::wcout << L"[DEBUG] macOS detected, setting up NSVisualEffectView..." << std::endl;
@@ -4226,22 +4211,38 @@ void MainWidget::setup_window_transparency() {
         }
         std::wcout << L"[DEBUG] NSVisualEffectView class found" << std::endl;
         
-        id visualEffectView = ((id(*)(Class, SEL))objc_msgSend)(
-            NSVisualEffectViewClass,
-            sel_registerName("alloc")
+        id contentSuperview = ((id(*)(id, SEL))objc_msgSend)(
+            qtContentView,
+            sel_registerName("superview")
         );
-        
-        // Initialize with the frame
-        visualEffectView = ((id(*)(id, SEL, CGRect))objc_msgSend)(
-            visualEffectView,
-            sel_registerName("initWithFrame:"),
-            contentFrame
-        );
-        if (!visualEffectView) {
-            std::wcout << L"[DEBUG] ERROR: Failed to create visual effect view!" << std::endl;
+        if (!contentSuperview) {
+            std::wcout << L"[DEBUG] ERROR: No content superview!" << std::endl;
             return;
         }
-        std::wcout << L"[DEBUG] Visual effect view created successfully" << std::endl;
+
+        static char OverlayAssociationKey;
+        id visualEffectView = objc_getAssociatedObject(contentSuperview, &OverlayAssociationKey);
+        bool isNewOverlay = false;
+
+        if (!visualEffectView) {
+            visualEffectView = ((id(*)(Class, SEL))objc_msgSend)(
+                NSVisualEffectViewClass,
+                sel_registerName("alloc")
+            );
+            
+            // Initialize with the frame
+            visualEffectView = ((id(*)(id, SEL, CGRect))objc_msgSend)(
+                visualEffectView,
+                sel_registerName("initWithFrame:"),
+                contentFrame
+            );
+            if (!visualEffectView) {
+                std::wcout << L"[DEBUG] ERROR: Failed to create visual effect view!" << std::endl;
+                return;
+            }
+            std::wcout << L"[DEBUG] Visual effect view created successfully" << std::endl;
+            isNewOverlay = true;
+        }
         std::wcout << L"[DEBUG] Using material: " << MACOS_BLUR_MATERIAL << std::endl;
         
         // Configure the visual effect view
@@ -4272,21 +4273,24 @@ void MainWidget::setup_window_transparency() {
             MACOS_BLUR_MATERIAL
         );
         
-        // Blending mode: BehindWindow for true blur effect
+        // Blending mode: Configurable via macos_blur_blend_mode
         // 0 = NSVisualEffectBlendingModeBehindWindow (blurs content behind the window)
         // 1 = NSVisualEffectBlendingModeWithinWindow (blurs content within the window)
         ((void(*)(id, SEL, long))objc_msgSend)(
             visualEffectView,
             sel_registerName("setBlendingMode:"),
-            0  // NSVisualEffectBlendingModeBehindWindow
+            MACOS_BLUR_BLEND_MODE
         );
-        
-        // State: Active
+        std::wcout << L"[DEBUG] Set blending mode to " << MACOS_BLUR_BLEND_MODE << std::endl;
+
+        // State: Configurable via macos_blur_state
+        // 0 = FollowsWindowActiveState, 1 = Active, 2 = Inactive
         ((void(*)(id, SEL, long))objc_msgSend)(
             visualEffectView,
             sel_registerName("setState:"),
-            1  // NSVisualEffectStateActive
+            MACOS_BLUR_STATE
         );
+        std::wcout << L"[DEBUG] Set blur state to " << MACOS_BLUR_STATE << std::endl;
         
         // Set autoresizing mask
         ((void(*)(id, SEL, unsigned int))objc_msgSend)(
@@ -4295,43 +4299,98 @@ void MainWidget::setup_window_transparency() {
             18  // NSViewWidthSizable | NSViewHeightSizable
         );
         
-        // Remove Qt's view from the window temporarily
-        std::wcout << L"[DEBUG] Removing Qt view from superview..." << std::endl;
-        ((void(*)(id, SEL))objc_msgSend)(
-            qtContentView,
-            sel_registerName("removeFromSuperview")
-        );
-        
-        // Set the visual effect view as the window's content view
-        std::wcout << L"[DEBUG] Setting visual effect view as content view..." << std::endl;
-        ((void(*)(id, SEL, id))objc_msgSend)(
-            nswindow,
-            sel_registerName("setContentView:"),
-            visualEffectView
-        );
-        
-        // Add Qt's view as a subview of the visual effect view
-        // This way Qt's content is ON TOP of the blur
-        std::wcout << L"[DEBUG] Adding Qt view as subview..." << std::endl;
-        ((void(*)(id, SEL, id))objc_msgSend)(
+        if (isNewOverlay) {
+            // Remove Qt view from its theme frame
+            std::wcout << L"[DEBUG] Installing full-window visual effect container..." << std::endl;
+            ((void(*)(id, SEL))objc_msgSend)(
+                qtContentView,
+                sel_registerName("removeFromSuperview")
+            );
+
+            CGRect superBounds = ((CGRect(*)(id, SEL))objc_msgSend)(
+                contentSuperview,
+                sel_registerName("bounds")
+            );
+            ((void(*)(id, SEL, CGRect))objc_msgSend)(
+                visualEffectView,
+                sel_registerName("setFrame:"),
+                superBounds
+            );
+            ((void(*)(id, SEL, unsigned int))objc_msgSend)(
+                visualEffectView,
+                sel_registerName("setAutoresizingMask:"),
+                18  // NSViewWidthSizable | NSViewHeightSizable
+            );
+
+            ((void(*)(id, SEL, id))objc_msgSend)(
+                contentSuperview,
+                sel_registerName("addSubview:"),
+                visualEffectView
+            );
+
+            ((void(*)(id, SEL, id))objc_msgSend)(
+                visualEffectView,
+                sel_registerName("addSubview:"),
+                qtContentView
+            );
+
+            objc_setAssociatedObject(contentSuperview, &OverlayAssociationKey, visualEffectView, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        }
+        else {
+            CGRect superBounds = ((CGRect(*)(id, SEL))objc_msgSend)(
+                contentSuperview,
+                sel_registerName("bounds")
+            );
+            ((void(*)(id, SEL, CGRect))objc_msgSend)(
+                visualEffectView,
+                sel_registerName("setFrame:"),
+                superBounds
+            );
+
+            id currentSuperview = ((id(*)(id, SEL))objc_msgSend)(
+                qtContentView,
+                sel_registerName("superview")
+            );
+            if (currentSuperview != visualEffectView) {
+                ((void(*)(id, SEL))objc_msgSend)(
+                    qtContentView,
+                    sel_registerName("removeFromSuperview")
+                );
+                ((void(*)(id, SEL, id))objc_msgSend)(
+                    visualEffectView,
+                    sel_registerName("addSubview:"),
+                    qtContentView
+                );
+            }
+        }
+
+        // Ensure the Qt view stretches to the overlay bounds (covers titlebar region)
+        CGRect overlayBounds = ((CGRect(*)(id, SEL))objc_msgSend)(
             visualEffectView,
-            sel_registerName("addSubview:"),
-            qtContentView
+            sel_registerName("bounds")
         );
-        
-        // Make sure Qt's view fills the visual effect view
-        std::wcout << L"[DEBUG] Setting Qt view frame..." << std::endl;
         ((void(*)(id, SEL, CGRect))objc_msgSend)(
             qtContentView,
             sel_registerName("setFrame:"),
-            contentFrame
+            overlayBounds
         );
-        
         ((void(*)(id, SEL, unsigned int))objc_msgSend)(
             qtContentView,
             sel_registerName("setAutoresizingMask:"),
             18  // NSViewWidthSizable | NSViewHeightSizable
         );
+
+        // Restore focus chain so the first click is not swallowed
+        ((void(*)(id, SEL, id))objc_msgSend)(
+            nswindow,
+            sel_registerName("makeFirstResponder:"),
+            qtContentView
+        );
+
+        QTimer::singleShot(0, this, [this]() {
+            activateWindow();
+            setFocus(Qt::OtherFocusReason);
+        });
         
         // Make window non-opaque for transparency
         std::wcout << L"[DEBUG] Setting window as non-opaque..." << std::endl;
@@ -4346,7 +4405,7 @@ void MainWidget::setup_window_transparency() {
     // Non-macOS platforms: Use Qt's built-in transparency
     std::wcout << L"[DEBUG] Using Qt transparency (non-macOS)" << std::endl;
     setAttribute(Qt::WA_TranslucentBackground);
-    setWindowOpacity(opacity);
+    setWindowOpacity(WINDOW_TRANSPARENCY);
 #endif
 }
 
@@ -4370,23 +4429,35 @@ void MainWidget::setup_native_window() {
         sel_registerName("window")
     );
     
-    if (!nswindow) return;
-    
+    if (!nswindow) {
+        std::cout << "ERROR: nswindow is null!" << std::endl;
+        return;
+    }
+
+    std::cout << "=== DEBUG: NSWindow Setup ===" << std::endl;
+
     // Get current style mask
     unsigned long styleMask = ((unsigned long(*)(id, SEL))objc_msgSend)(
         nswindow,
         sel_registerName("styleMask")
     );
-    
-    // Add NSWindowStyleMaskFullSizeContentView (1 << 15)
-    styleMask |= (1UL << 15);
-    
+
+    std::cout << "Current styleMask: " << styleMask << std::endl;
+    std::cout << "Has FullSizeContentView (before): " << ((styleMask & (1UL << 15)) ? "YES" : "NO") << std::endl;
+
+    // Ensure we draw into the title bar area
+    styleMask |= (1UL << 15);  // NSWindowStyleMaskFullSizeContentView
+
+    std::cout << "New styleMask: " << styleMask << std::endl;
+
     // Set the new style mask
     ((void(*)(id, SEL, unsigned long))objc_msgSend)(
         nswindow,
         sel_registerName("setStyleMask:"),
         styleMask
     );
+
+    std::cout << "Applied FullSizeContentView style mask" << std::endl;
     
     // Make titlebar transparent
     ((void(*)(id, SEL, BOOL))objc_msgSend)(
@@ -4395,52 +4466,88 @@ void MainWidget::setup_native_window() {
         YES
     );
     
-    // Hide the title
+    // Hide the text title but keep window buttons visible
     ((void(*)(id, SEL, long))objc_msgSend)(
         nswindow,
         sel_registerName("setTitleVisibility:"),
-        1  // NSWindowTitleHidden = 1
+        1  // NSWindowTitleHidden
     );
-    
-    // Hide window buttons
+
+    // Disable native window movement (following PyQt-Frameless-Window pattern)
+    ((void(*)(id, SEL, BOOL))objc_msgSend)(
+        nswindow,
+        sel_registerName("setMovableByWindowBackground:"),
+        NO
+    );
+
+    ((void(*)(id, SEL, BOOL))objc_msgSend)(
+        nswindow,
+        sel_registerName("setMovable:"),
+        NO
+    );
+
+    // Explicitly show traffic light buttons (close, minimize, zoom)
+    std::cout << "=== DEBUG: Traffic Light Buttons ===" << std::endl;
+
     id closeButton = ((id(*)(id, SEL, unsigned long))objc_msgSend)(
         nswindow,
         sel_registerName("standardWindowButton:"),
         0  // NSWindowCloseButton
     );
+    std::cout << "Close button: " << (closeButton ? "found" : "NULL") << std::endl;
     if (closeButton) {
+        BOOL isHidden = ((BOOL(*)(id, SEL))objc_msgSend)(
+            closeButton,
+            sel_registerName("isHidden")
+        );
+        std::cout << "Close button was hidden: " << (isHidden ? "YES" : "NO") << std::endl;
+
         ((void(*)(id, SEL, BOOL))objc_msgSend)(
             closeButton,
             sel_registerName("setHidden:"),
-            YES
+            NO  // Visible
         );
+        std::cout << "Set close button visible" << std::endl;
     }
-    
+
     id miniaturizeButton = ((id(*)(id, SEL, unsigned long))objc_msgSend)(
         nswindow,
         sel_registerName("standardWindowButton:"),
         1  // NSWindowMiniaturizeButton
     );
+    std::cout << "Minimize button: " << (miniaturizeButton ? "found" : "NULL") << std::endl;
     if (miniaturizeButton) {
         ((void(*)(id, SEL, BOOL))objc_msgSend)(
             miniaturizeButton,
             sel_registerName("setHidden:"),
-            YES
+            NO
         );
     }
-    
+
     id zoomButton = ((id(*)(id, SEL, unsigned long))objc_msgSend)(
         nswindow,
         sel_registerName("standardWindowButton:"),
         2  // NSWindowZoomButton
     );
+    std::cout << "Zoom button: " << (zoomButton ? "found" : "NULL") << std::endl;
     if (zoomButton) {
         ((void(*)(id, SEL, BOOL))objc_msgSend)(
             zoomButton,
             sel_registerName("setHidden:"),
-            YES
+            NO
         );
     }
+
+    std::cout << "=== DEBUG: Setup complete ===" << std::endl;
+
+    // Enable native tabbing support (for future multi-document support)
+    // Users can create new tabs with Cmd+T or Window > Merge All Windows
+    ((void(*)(id, SEL, long))objc_msgSend)(
+        nswindow,
+        sel_registerName("setTabbingMode:"),
+        2  // NSWindowTabbingModePreferred
+    );
+
 #endif
 }
 
