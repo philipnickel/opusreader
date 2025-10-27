@@ -24,7 +24,6 @@
 #include "book.h"
 #include "config.h"
 #include "pdf_renderer.h"
-#include "input.h"
 #include "pdf_view_opengl_widget.h"
 #include "path.h"
 #include "checksum.h"
