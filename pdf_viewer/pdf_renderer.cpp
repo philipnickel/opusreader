@@ -326,8 +326,8 @@ void PdfRenderer::run_search(int thread_index)
 				if (num_results > 0) {
 					req.search_results_mutex->lock();
 					for (int j = 0; j < num_results; j++) {
-						if (hit_mark[j] == 1) {
-							// Hit box belongs to new entry
+						if (hit_mark[j] == 1 || req.search_results->empty()) {
+							// Hit box belongs to new entry or no results exist yet
 							req.search_results->push_back(SearchResult{ std::vector<fz_rect>(), i });
 						}
 						req.search_results->back().rects.push_back(fz_rect_from_quad(hitboxes[j]));

@@ -2401,6 +2401,18 @@ void MainWidget::move_vertical(float amount) {
 
 void MainWidget::zoom(WindowPos pos, float zoom_factor, bool zoom_in) {
     last_smart_fit_page = {};
+	if (opengl_widget && opengl_widget->get_overview_page()) {
+		NormalizedWindowPos normal_pos = main_document_view->window_to_normalized_window_pos(pos);
+		if (opengl_widget->is_window_point_in_overview(fvec2(normal_pos))) {
+			if (zoom_in) {
+				opengl_widget->adjust_overview_zoom(zoom_factor);
+			}
+			else if (zoom_factor != 0.0f) {
+				opengl_widget->adjust_overview_zoom(1.0f / zoom_factor);
+			}
+			return;
+		}
+	}
     if (zoom_in) {
         if (WHEEL_ZOOM_ON_CURSOR) {
             main_document_view->zoom_in_cursor(pos, zoom_factor);
@@ -2907,7 +2919,11 @@ bool MainWidget::is_visual_mark_mode() {
 void MainWidget::scroll_overview(int amount) {
     float vertical_move_amount = VERTICAL_MOVE_AMOUNT * TOUCHPAD_SENSITIVITY * SCROLL_VIEW_SENSITIVITY;
 	OverviewState state = opengl_widget->get_overview_page().value();
-	state.absolute_offset_y += 36.0f * vertical_move_amount * amount;
+	float zoom_scale = opengl_widget->get_overview_zoom();
+	if (zoom_scale < 0.01f) {
+		zoom_scale = 0.01f;
+	}
+	state.absolute_offset_y += 36.0f * vertical_move_amount * amount / zoom_scale;
 	opengl_widget->set_overview_page(state);
     handle_portal_overview_update();
 }
