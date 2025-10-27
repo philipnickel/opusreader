@@ -1,3 +1,4 @@
+#include <cmath>
 #include <iostream>
 #include <vector>
 #include <string>
@@ -22,6 +23,7 @@ extern Path default_config_path;
 extern Path default_keys_path;
 extern std::vector<Path> user_config_paths;
 extern std::vector<Path> user_keys_paths;
+extern float ZOOM_INC_FACTOR;
 
 class SymbolCommand : public Command {
 protected:
@@ -426,7 +428,16 @@ class MoveRightCommand : public Command {
 
 class ZoomInCommand : public Command {
 	void perform(MainWidget* widget) {
-		widget->main_document_view->zoom_in();
+		int repeats = num_repeats <= 0 ? 1 : num_repeats;
+		if (widget->opengl_widget->get_overview_page()) {
+			float factor = std::pow(ZOOM_INC_FACTOR, repeats);
+			widget->opengl_widget->adjust_overview_zoom(factor);
+			widget->last_smart_fit_page = {};
+			return;
+		}
+		for (int i = 0; i < repeats; ++i) {
+			widget->main_document_view->zoom_in();
+		}
 		widget->last_smart_fit_page = {};
 	}
 
@@ -502,7 +513,18 @@ class PreviousPageCommand : public Command {
 class ZoomOutCommand : public Command {
 
 	void perform(MainWidget* widget) {
-		widget->main_document_view->zoom_out();
+		int repeats = num_repeats <= 0 ? 1 : num_repeats;
+		if (widget->opengl_widget->get_overview_page()) {
+			float factor = std::pow(ZOOM_INC_FACTOR, repeats);
+			if (factor != 0.0f) {
+				widget->opengl_widget->adjust_overview_zoom(1.0f / factor);
+			}
+			widget->last_smart_fit_page = {};
+			return;
+		}
+		for (int i = 0; i < repeats; ++i) {
+			widget->main_document_view->zoom_out();
+		}
 		widget->last_smart_fit_page = {};
 	}
 

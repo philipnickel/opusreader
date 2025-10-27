@@ -1,3 +1,4 @@
+.claude
 # Build artifacts
 builds/
 
@@ -24,6 +25,9 @@ qrc_*.cpp
 pdf_viewer/prefs_user.config
 pdf_viewer/keys_user.config
 
+# Database state files
+pdf_viewer/state/*.db
+
 # IDE
 .vscode/
 .idea/
@@ -36,3 +40,7 @@ pdf_viewer/keys_user.config
 
 # Documentation build
 site/
+docs_generated/
+docs/build/
+docs/source/api/
+docs/.venv/

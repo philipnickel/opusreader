@@ -150,6 +150,7 @@ private:
 
 	float overview_offset_x = 0.0f;
 	float overview_offset_y = 0.0f;
+	float overview_zoom = 1.0f;
 
 	std::optional<fz_rect> selected_rectangle = {};
 
@@ -233,6 +234,9 @@ public:
 
 	void get_overview_offsets(float* offset_x, float* offset_y);
 	void get_overview_size(float* width, float* height);
+	float get_overview_zoom() const;
+	void reset_overview_zoom();
+	void adjust_overview_zoom(float factor);
 
 	float get_overview_side_pos(int index);
 	void set_overview_side_pos(int index, fz_rect original_rect, fvec2 diff);

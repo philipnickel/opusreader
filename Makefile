@@ -1,4 +1,4 @@
-.PHONY: all build clean help build-core
+.PHONY: all build clean help build-core docs
 
 BUILD_DIR := builds
 APP_BUILD := $(BUILD_DIR)/opusreader.app
@@ -14,6 +14,7 @@ help:
 	@echo "======================="
 	@echo "make build  - compile the .app bundle"
 	@echo "make clean  - remove build artifacts"
+	@echo "make docs   - generate documentation with Doxygen"
 
 build: | $(BUILD_DIR)
 	@LOG_FILE=$(LOG_FILE); \
@@ -70,6 +71,26 @@ clean:
 	@if [ -f Makefile.qmake ]; then $(MAKE) -f Makefile.qmake clean; fi
 	@rm -f Makefile.qmake
 	@echo "✓ Clean complete!"
+
+docs:
+	@echo "Generating documentation with Doxygen..."
+	@command -v doxygen >/dev/null 2>&1 || { \
+		echo "❌ Doxygen not found. Install via 'brew install doxygen'."; \
+		exit 1; \
+	}
+	@command -v uv >/dev/null 2>&1 || { \
+		echo "❌ uv not found. Install via 'brew install uv'."; \
+		exit 1; \
+	}
+	@doxygen Doxyfile
+	@rm -rf docs/source/api
+	@echo "Building Sphinx HTML output..."
+	@uv run --project docs sphinx-build -b html docs/source docs/build/html
+	@echo ""
+	@echo "========================================="
+	@echo "✓ Documentation generated!"
+	@echo "  Output: docs/build/html/index.html"
+	@echo "========================================="
 
 $(BUILD_DIR):
 	@mkdir -p $@
