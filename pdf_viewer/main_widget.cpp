@@ -35,6 +35,8 @@
 #include <qmimedata.h>
 #include <qscreen.h>
 #include <qregularexpression.h>
+#include <QStringList>
+#include <QSet>
 
 #ifdef Q_OS_MACOS
 #include <objc/objc.h>
@@ -3839,7 +3841,189 @@ void MainWidget::handle_goto_toc() {
 }
 
 void MainWidget::handle_open_prev_doc() {
+	open_harpoon_picker();
+}
 
+void MainWidget::handle_open_leader_menu() {
+	auto run_command = [this](const std::string& name) {
+		auto command = command_manager->get_command_with_name(name);
+		if (command) {
+			advance_command(std::move(command));
+		}
+	};
+
+	struct CommandTreeNode {
+		std::map<QString, CommandTreeNode> children;
+		std::optional<std::string> command_name;
+	};
+
+	auto add_command_to_tree = [](CommandTreeNode& tree, const QString& command_name, const std::string& command_id) {
+		QStringList tokens = command_name.split('_', Qt::SkipEmptyParts);
+		if (tokens.isEmpty()) {
+			tokens.push_back(command_name);
+		}
+
+		CommandTreeNode* node = &tree;
+		for (const auto& token : tokens) {
+			node = &node->children[token];
+		}
+		if (!node->command_name.has_value()) {
+			node->command_name = command_id;
+		}
+	};
+
+	auto format_label = [](const QString& token) -> QString {
+		QString res = token;
+		res.replace('_', ' ');
+		if (!res.isEmpty()) {
+			res[0] = res[0].toUpper();
+		}
+		return res;
+	};
+
+	auto choose_key = [](const QString& label, QSet<QString>& used_keys) -> QString {
+		for (QChar ch : label) {
+			if (!ch.isLetterOrNumber()) {
+				continue;
+			}
+			QString candidate = QString(ch).toLower();
+			if (!used_keys.contains(candidate)) {
+				used_keys.insert(candidate);
+				return candidate;
+			}
+		}
+		const QString fallback_chars = QStringLiteral("1234567890abcdefghijklmnopqrstuvwxyz");
+		for (QChar ch : fallback_chars) {
+			QString candidate(ch);
+			if (!used_keys.contains(candidate)) {
+				used_keys.insert(candidate);
+				return candidate;
+			}
+		}
+		QString fallback = QStringLiteral("?");
+		used_keys.insert(fallback);
+		return fallback;
+	};
+
+	std::function<std::vector<LeaderMenuNode>(const CommandTreeNode&)> build_command_nodes =
+		[&](const CommandTreeNode& tree) -> std::vector<LeaderMenuNode> {
+		std::vector<LeaderMenuNode> nodes;
+		QSet<QString> used_keys;
+
+		for (const auto& pair : tree.children) {
+			const QString& token = pair.first;
+			const CommandTreeNode& child = pair.second;
+
+			LeaderMenuNode node;
+			node.key = choose_key(token, used_keys);
+			node.description = format_label(token);
+			node.children = build_command_nodes(child);
+
+		if (child.command_name.has_value()) {
+			const std::string command_id = child.command_name.value();
+			if (node.children.empty()) {
+				node.description = format_label(QString::fromStdString(command_id));
+				node.action = [run_command, command_id]() { run_command(command_id); };
+			}
+			else {
+				QSet<QString> child_used_keys;
+				for (const auto& existing_child : node.children) {
+					child_used_keys.insert(existing_child.key.toLower());
+				}
+				LeaderMenuNode command_leaf;
+				command_leaf.key = choose_key(QStringLiteral("run"), child_used_keys);
+				command_leaf.description = QStringLiteral("run %1").arg(format_label(QString::fromStdString(command_id)));
+				command_leaf.action = [run_command, command_id]() { run_command(command_id); };
+				node.children.push_back(std::move(command_leaf));
+			}
+		}
+		nodes.push_back(std::move(node));
+		}
+
+		return nodes;
+	};
+
+	LeaderMenuNode root_node;
+
+	LeaderMenuNode file_group;
+	file_group.key = QStringLiteral("f");
+	file_group.description = QStringLiteral("file");
+	file_group.children = {
+		LeaderMenuNode{ QStringLiteral("o"), QStringLiteral("open"), [=]() { run_command("open_document"); }, {} },
+		LeaderMenuNode{ QStringLiteral("r"), QStringLiteral("recent"), [this]() { open_harpoon_picker(); }, {} },
+		LeaderMenuNode{ QStringLiteral("p"), QStringLiteral("preferences"), [this]() { handle_prefs_user_all(); }, {} },
+		LeaderMenuNode{ QStringLiteral("k"), QStringLiteral("key bindings"), [this]() { handle_keys_user_all(); }, {} }
+	};
+
+	LeaderMenuNode goto_group;
+	goto_group.key = QStringLiteral("g");
+	goto_group.description = QStringLiteral("goto");
+	goto_group.children = {
+		LeaderMenuNode{ QStringLiteral("t"), QStringLiteral("table of contents"), [this]() { handle_goto_toc(); }, {} },
+		LeaderMenuNode{ QStringLiteral("b"), QStringLiteral("bookmarks"), [this]() { handle_goto_bookmark(); }, {} },
+		LeaderMenuNode{ QStringLiteral("h"), QStringLiteral("highlights"), [this]() { handle_goto_highlight(); }, {} },
+		LeaderMenuNode{ QStringLiteral("w"), QStringLiteral("overview"), [this]() { goto_overview(); }, {} }
+	};
+
+	LeaderMenuNode search_group;
+	search_group.key = QStringLiteral("s");
+	search_group.description = QStringLiteral("search");
+	search_group.children = {
+		LeaderMenuNode{ QStringLiteral("s"), QStringLiteral("search text"), [=]() { run_command("search"); }, {} },
+		LeaderMenuNode{ QStringLiteral("c"), QStringLiteral("chapter search"), [=]() { run_command("chapter_search"); }, {} },
+		LeaderMenuNode{ QStringLiteral("n"), QStringLiteral("next result"), [=]() { run_command("next_item"); }, {} },
+		LeaderMenuNode{ QStringLiteral("p"), QStringLiteral("previous result"), [=]() { run_command("previous_item"); }, {} }
+	};
+
+	LeaderMenuNode window_group;
+	window_group.key = QStringLiteral("w");
+	window_group.description = QStringLiteral("window");
+	window_group.children = {
+		LeaderMenuNode{ QStringLiteral("n"), QStringLiteral("new window"), [this]() { handle_new_window(); }, {} },
+		LeaderMenuNode{ QStringLiteral("g"), QStringLiteral("goto window"), [this]() { handle_goto_window(); }, {} },
+		LeaderMenuNode{ QStringLiteral("s"), QStringLiteral("toggle smooth scroll"), [this]() { handle_toggle_smooth_scroll_mode(); }, {} },
+		LeaderMenuNode{ QStringLiteral("d"), QStringLiteral("toggle dark mode"), [this]() { toggle_dark_mode(); }, {} }
+	};
+
+	LeaderMenuNode commands_group;
+	commands_group.key = QStringLiteral("c");
+	commands_group.description = QStringLiteral("commands");
+
+	QStringList command_names = command_manager->get_all_command_names();
+	command_names.sort(Qt::CaseInsensitive);
+
+	CommandTreeNode command_tree;
+	for (const auto& command_name_qs : command_names) {
+		QString command_q = command_name_qs.trimmed();
+		if (command_q.isEmpty()) {
+			continue;
+		}
+		if (command_q.compare(QStringLiteral("open_leader_menu"), Qt::CaseInsensitive) == 0) {
+			continue;
+		}
+		add_command_to_tree(command_tree, command_q, command_q.toStdString());
+	}
+
+	commands_group.children = build_command_nodes(command_tree);
+
+	root_node.children = {
+		LeaderMenuNode{ QStringLiteral("h"), QStringLiteral("harpoon"), [this]() { open_harpoon_picker(); }, {} },
+		std::move(file_group),
+		std::move(goto_group),
+		std::move(search_group),
+		std::move(window_group)
+	};
+
+	if (!commands_group.children.empty()) {
+		root_node.children.push_back(std::move(commands_group));
+	}
+
+	auto* menu = new LeaderMenuWidget(std::move(root_node), this);
+	set_current_widget(menu);
+	current_widget->show();
+}
+
+void MainWidget::open_harpoon_picker() {
 	std::vector<std::wstring> opened_docs_names;
 	std::vector<std::wstring> opened_docs_hashes_;
 	std::vector<std::string> opened_docs_hashes;
@@ -3859,18 +4043,29 @@ void MainWidget::handle_open_prev_doc() {
 		}
 	}
 
-	set_current_widget(new FilteredSelectWindowClass<std::string>(opened_docs_names,
-		opened_docs_hashes,
-		[&](std::string* doc_hash) {
-			if (doc_hash->size() > 0) {
+	std::vector<HarpoonItem> items;
+	items.reserve(opened_docs_names.size());
+	for (size_t i = 0; i < opened_docs_names.size(); ++i) {
+		HarpoonItem item;
+		item.label = opened_docs_names[i];
+		item.value = opened_docs_hashes[i];
+		items.push_back(item);
+	}
+
+	auto picker = new HarpoonPickerWidget(
+		std::move(items),
+		[&](const HarpoonItem& item) {
+			if (!item.value.empty()) {
 				validate_render();
-				open_document_with_hash(*doc_hash);
+				open_document_with_hash(item.value);
 			}
 		},
-		this,
-			[&](std::string* doc_hash) {
-			db_manager->delete_opened_book(*doc_hash);
-		}));
+		[&](const HarpoonItem& item) {
+			db_manager->delete_opened_book(item.value);
+		},
+		this);
+
+	set_current_widget(picker);
 	current_widget->show();
 }
 

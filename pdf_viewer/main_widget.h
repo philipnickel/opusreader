@@ -318,6 +318,7 @@ public:
 	void handle_goto_highlight_global();
 	void handle_goto_toc();
 	void handle_open_prev_doc();
+	void handle_open_leader_menu();
 	void handle_move_screen(int amount);
 	void handle_new_window();
 	void handle_open_link(const std::wstring& text, bool copy=false);
@@ -335,6 +336,7 @@ public:
 	void synchronize_pending_link();
 	void refresh_all_windows();
 	std::optional<std::pair<int, fz_link*>> get_selected_link(const std::wstring& text);
+	void open_harpoon_picker();
 
 	int num_visible_links();
 

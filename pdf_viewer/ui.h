@@ -24,13 +24,16 @@
 #include <qdatetime.h>
 #include <qstackedwidget.h>
 #include <qboxlayout.h>
+#include <qlabel.h>
 #include <qlistview.h>
+#include <qlistwidget.h>
 #include <qtableview.h>
 #include <qstringlistmodel.h>
 #include <qpalette.h>
 #include <qstandarditemmodel.h>
 #include <qfilesystemmodel.h>
 #include <qheaderview.h>
+#include <qgridlayout.h>
 
 #include "rapidfuzz_amalgamated.hpp"
 
@@ -772,6 +775,81 @@ public:
 			line_edit->setText(full_path + sep);
 		}
 	}
+};
+
+struct LeaderMenuNode {
+	QString key;
+	QString description;
+	std::function<void()> action;
+	std::vector<LeaderMenuNode> children;
+};
+
+class LeaderMenuWidget : public QWidget, public ConfigFileChangeListener {
+public:
+	LeaderMenuWidget(LeaderMenuNode root_node, QWidget* parent);
+	void on_config_file_changed(ConfigManager* new_config_manager) override;
+
+protected:
+	void keyPressEvent(QKeyEvent* event) override;
+	void paintEvent(QPaintEvent* event) override;
+	void resizeEvent(QResizeEvent* event) override;
+
+private:
+	LeaderMenuNode root;
+	std::vector<const LeaderMenuNode*> node_stack;
+	std::vector<const LeaderMenuNode*> visible_entries;
+	QWidget* panel = nullptr;
+	QWidget* entries_container = nullptr;
+	QGridLayout* entries_grid = nullptr;
+	QLabel* breadcrumb_label = nullptr;
+	std::vector<QLabel*> key_labels;
+	std::vector<QLabel*> description_labels;
+	std::vector<QLabel*> arrow_labels;
+
+	void rebuild_entries();
+	void apply_styles();
+	void activate_entry(const LeaderMenuNode* entry);
+	void enter_child_node(const LeaderMenuNode* child);
+	void pop_node();
+	void update_breadcrumb();
+	void update_panel_geometry();
+};
+
+struct HarpoonItem {
+	std::wstring label;
+	std::string value;
+};
+
+class HarpoonPickerWidget : public QWidget, public ConfigFileChangeListener {
+public:
+	HarpoonPickerWidget(std::vector<HarpoonItem> items,
+		std::function<void(const HarpoonItem&)> on_select,
+		std::function<void(const HarpoonItem&)> on_delete,
+		QWidget* parent);
+
+	void on_config_file_changed(ConfigManager* new_config_manager) override;
+
+protected:
+	void keyPressEvent(QKeyEvent* event) override;
+	void resizeEvent(QResizeEvent* event) override;
+
+private:
+	std::vector<HarpoonItem> items;
+	std::function<void(const HarpoonItem&)> on_select;
+	std::function<void(const HarpoonItem&)> on_delete;
+	QListWidget* list_widget = nullptr;
+	QString pending_digits;
+	QTimer number_timer;
+
+	void apply_styles();
+	void refresh_items();
+	void select_index(int index);
+	void activate_current_item();
+	void activate_index(int index);
+	void handle_digit(int value);
+	void clear_pending_digits();
+	void commit_pending_digits();
+	void handle_delete();
 };
 
 std::wstring select_document_file_name();

@@ -701,6 +701,22 @@ class OpenPrevDocCommand : public Command {
 	bool requires_document() { return false; }
 };
 
+class OpenLeaderMenuCommand : public Command {
+	void perform(MainWidget* widget) {
+		widget->handle_open_leader_menu();
+	}
+
+	bool pushes_state() {
+		return false;
+	}
+
+	std::string get_name() {
+		return "open_leader_menu";
+	}
+
+	bool requires_document() { return false; }
+};
+
 class OpenDocumentEmbeddedCommand : public Command {
 	void perform(MainWidget* widget) {
 		widget->set_current_widget(new FileSelector(
@@ -2252,6 +2268,7 @@ CommandManager::CommandManager(ConfigManager* config_manager) {
 	new_commands["edit_link"] = []() {return std::make_unique< EditPortalCommand>(); };
 	new_commands["edit_portal"] = []() {return std::make_unique< EditPortalCommand>(); };
 	new_commands["open_prev_doc"] = []() {return std::make_unique< OpenPrevDocCommand>(); };
+	new_commands["open_leader_menu"] = []() {return std::make_unique< OpenLeaderMenuCommand>(); };
 	new_commands["open_document_embedded"] = []() {return std::make_unique< OpenDocumentEmbeddedCommand>(); };
 	new_commands["open_document_embedded_from_current_path"] = []() {return std::make_unique< OpenDocumentEmbeddedFromCurrentPathCommand>(); };
 	new_commands["copy"] = []() {return std::make_unique< CopyCommand>(); };
